@@ -10,7 +10,7 @@
  * que o header X-Forwarded-For é passado, senão o limite aplica-se globalmente.
  */
 
-import { gerarPdfCotacao } from '../../../lib/cotacao-pdf';
+import { gerarPdfCotacao, calcularPremios } from '../../../lib/cotacao-pdf';
 
 const UCALL_API         = process.env.UCALL_API || 'https://apiservicesgocontact.ucall.co.ao/api/v1/GoContact/LoadContacts';
 const UCALL_APIKEY      = process.env.UCALL_APIKEY || '';
@@ -106,6 +106,15 @@ export async function POST(request) {
     }
   }
 
+  /* descrição do pedido para o operador (field7) */
+  let field7 = 'Website - Seguro Empregados Domésticos';
+  if (salarios.length) {
+    const premioAnual = calcularPremios(salarios).premioAnual;
+    const valor = premioAnual.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d),)/g, ' ');
+    field7 += ' - ' + salarios.length + ' empregado' + (salarios.length > 1 ? 's' : '') +
+              ' - Prémio anual ' + valor + ' AOA';
+  }
+
   try {
     const resposta = await fetch(UCALL_API, {
       method: 'POST',
@@ -116,7 +125,7 @@ export async function POST(request) {
         callback: false,
         contact_Name: nome,
         direct_To_Hopper: true,
-        field7: 'Website - Pedido de contacto',
+        field7: field7,
         field11: cotacaoUrl || 'website',
       }),
       signal: AbortSignal.timeout(15000),
