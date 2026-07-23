@@ -5,8 +5,8 @@ services:
     restart: unless-stopped
     ports:
       # ligado apenas ao localhost do servidor: o acesso público faz-se
-      # através do reverse proxy (Caddy/nginx) com HTTPS
-      - "127.0.0.1:6510:3000"
+      # através do reverse proxy (nginx-proxy-manager) com HTTPS
+      - "127.0.0.1:6510:6510"
     environment:
       # definir em .env (copiar de .env.example); nunca commitar a chave
       - UCALL_APIKEY=${UCALL_APIKEY}
@@ -20,7 +20,7 @@ services:
       - proxy
 
 networks:
-  # rede do nginx-proxy-manager: no NPM apontar para nossa-simulador:3000
+  # rede do nginx-proxy-manager: no NPM apontar para nossa-simulador:6510
   proxy:
     external: true
     name: ${PROXY_NETWORK:-nginx-proxy-manager_default}
