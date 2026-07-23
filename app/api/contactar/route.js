@@ -127,8 +127,10 @@ export async function POST(request) {
       registarPedido(ip); // conta para o limite apenas quando aceite
       return json({ sucesso: true, mensagem: 'Pedido registado com sucesso.', cotacao_url: cotacaoUrl }, 200);
     }
+    console.error('[contactar] uCall respondeu mas não aceitou (HTTP ' + resposta.status + '):', JSON.stringify(resultado).slice(0, 400));
     return json({ sucesso: false, mensagem: 'O serviço não aceitou o pedido. Tente novamente.' }, 502);
-  } catch {
+  } catch (erro) {
+    console.error('[contactar] falha na chamada à uCall:', erro && erro.message ? erro.message : erro);
     return json({ sucesso: false, mensagem: 'Não foi possível contactar o serviço. Tente novamente.' }, 502);
   }
 }
