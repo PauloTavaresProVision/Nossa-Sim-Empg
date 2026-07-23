@@ -130,7 +130,8 @@ export async function POST(request) {
     console.error('[contactar] uCall respondeu mas não aceitou (HTTP ' + resposta.status + '):', JSON.stringify(resultado).slice(0, 400));
     return json({ sucesso: false, mensagem: 'O serviço não aceitou o pedido. Tente novamente.' }, 502);
   } catch (erro) {
-    console.error('[contactar] falha na chamada à uCall:', erro && erro.message ? erro.message : erro);
+    const causa = erro && erro.cause ? ' | causa: ' + (erro.cause.code || '') + ' ' + (erro.cause.message || '') : '';
+    console.error('[contactar] falha na chamada à uCall: ' + (erro && erro.message ? erro.message : erro) + causa);
     return json({ sucesso: false, mensagem: 'Não foi possível contactar o serviço. Tente novamente.' }, 502);
   }
 }
