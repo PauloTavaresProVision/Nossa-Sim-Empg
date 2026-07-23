@@ -1,0 +1,17 @@
+services:
+  simulador:
+    build: .
+    container_name: nossa-simulador
+    restart: unless-stopped
+    ports:
+      # ligado apenas ao localhost do servidor: o acesso público faz-se
+      # através do reverse proxy (Caddy/nginx) com HTTPS
+      - "127.0.0.1:6510:3000"
+    environment:
+      # definir em .env (copiar de .env.example); nunca commitar a chave
+      - UCALL_APIKEY=${UCALL_APIKEY}
+      # URL pública do site, usada no link do PDF enviado ao call center
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+    volumes:
+      # os PDFs das cotações sobrevivem a rebuilds do contentor
+      - ./cotacoes:/app/cotacoes
