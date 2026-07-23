@@ -270,6 +270,53 @@
   }
   input.invalido { border-color: #B03A2E; }
 
+  /* ================= Pop-up de confirmação ================= */
+  .modal-fundo {
+    display: none;
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(10, 29, 63, .55);
+    align-items: center; justify-content: center;
+    padding: 1rem;
+  }
+  .modal-fundo.aberto { display: flex; }
+  .modal {
+    background: var(--branco);
+    border-radius: 6px;
+    width: 100%; max-width: 26rem;
+    padding: 1.5rem;
+    box-shadow: 0 12px 40px rgba(10, 29, 63, .3);
+  }
+  .modal h3 {
+    font-size: .82rem; font-weight: 700; color: var(--navy-escuro);
+    text-transform: uppercase; letter-spacing: .07em;
+    border-left: 4px solid var(--verde);
+    padding-left: .7rem;
+    margin-bottom: 1rem;
+  }
+  .modal .modal-texto { font-size: .85rem; color: var(--texto-suave); margin-bottom: .9rem; }
+  .modal .modal-dados { width: 100%; border-collapse: collapse; margin-bottom: 1.1rem; }
+  .modal .modal-dados td {
+    padding: .45rem 0; font-size: .86rem;
+    border-bottom: 1px solid var(--borda-suave);
+    color: var(--texto-suave);
+  }
+  .modal .modal-dados td:last-child {
+    text-align: right; font-weight: 700; color: var(--navy-escuro);
+    font-variant-numeric: tabular-nums;
+  }
+  .modal-acoes { display: flex; gap: .7rem; }
+  .modal-acoes button {
+    flex: 1; height: 2.7rem; border-radius: 4px;
+    font-size: .8rem; font-weight: 700; font-family: inherit;
+    text-transform: uppercase; letter-spacing: .05em; cursor: pointer;
+  }
+  .btn-modal-confirmar { background: var(--verde); color: #fff; border: none; }
+  .btn-modal-confirmar:hover { background: var(--verde-escuro); }
+  .btn-modal-confirmar:disabled { background: #A9B1C7; cursor: default; }
+  .btn-modal-cancelar { background: var(--branco); color: var(--texto-suave); border: 1px solid var(--borda); }
+  .btn-modal-cancelar:hover { border-color: var(--texto-claro); }
+  .modal .feedback { margin-top: 0; margin-bottom: .9rem; }
+
   /* ================= Coberturas ================= */
   .coberturas { grid-column: 1 / -1; }
   .cob-intro {
@@ -478,6 +525,23 @@
   </div>
 </footer>
 
+<div class="modal-fundo" id="modal-contacto" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+  <div class="modal">
+    <h3 id="modal-titulo">Confirmar Pedido de Contacto</h3>
+    <p class="modal-texto" id="modal-texto">A equipa da NOSSA Seguros vai ligar-lhe para o número indicado. Confirme os seus dados:</p>
+    <table class="modal-dados">
+      <tr><td>Nome</td><td id="modal-nome"></td></tr>
+      <tr><td>Telefone</td><td id="modal-telefone"></td></tr>
+      <tr id="modal-linha-premio"><td>Prémio anual simulado</td><td id="modal-premio"></td></tr>
+    </table>
+    <div class="feedback" id="modal-feedback" role="status"></div>
+    <div class="modal-acoes">
+      <button type="button" class="btn-modal-cancelar" id="modal-cancelar">Cancelar</button>
+      <button type="button" class="btn-modal-confirmar" id="modal-confirmar">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -629,6 +693,34 @@
     return (digits.length === 9 && digits.charAt(0) === '9') ? digits : null;
   }
 
+  /* elementos do pop-up de confirmação */
+  var modal          = document.getElementById('modal-contacto');
+  var modalTexto     = document.getElementById('modal-texto');
+  var modalNome      = document.getElementById('modal-nome');
+  var modalTelefone  = document.getElementById('modal-telefone');
+  var modalPremio    = document.getElementById('modal-premio');
+  var modalLinhaPremio = document.getElementById('modal-linha-premio');
+  var modalFeedback  = document.getElementById('modal-feedback');
+  var modalConfirmar = document.getElementById('modal-confirmar');
+  var modalCancelar  = document.getElementById('modal-cancelar');
+  var aEnviar = false;
+
+  function formatarTelefone(t) { return t.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'); }
+
+  function salariosPreenchidos() {
+    var salarios = [];
+    lista.querySelectorAll('.inp-salario').forEach(function (inp) {
+      var s = parseSalario(inp);
+      if (s > 0) salarios.push(s);
+    });
+    return salarios;
+  }
+
+  function fecharModal() {
+    if (aEnviar) return;
+    modal.classList.remove('aberto');
+  }
+
   btnContacto.addEventListener('click', function () {
     var nome     = inpTomador.value.trim();
     var telefone = normalizarTelefone(inpTelefone.value);
@@ -643,47 +735,82 @@
                  : 'Indique um telefone válido (9 dígitos, começado por 9).'));
       return;
     }
-
-    btnContacto.disabled = true;
-    btnContacto.textContent = 'A enviar…';
     feedback.className = 'feedback';
 
-    /* envia também os salários para o servidor gerar o PDF da cotação */
-    var salarios = [];
-    lista.querySelectorAll('.inp-salario').forEach(function (inp) {
-      var s = parseSalario(inp);
-      if (s > 0) salarios.push(s);
-    });
+    /* prepara e abre o pop-up de confirmação */
+    var salarios = salariosPreenchidos();
+    modalNome.textContent     = nome;
+    modalTelefone.textContent = formatarTelefone(telefone);
+    if (salarios.length) {
+      modalLinhaPremio.style.display = '';
+      modalPremio.textContent = document.getElementById('p-anual').textContent + ' AOA';
+    } else {
+      modalLinhaPremio.style.display = 'none';
+    }
+    modalTexto.style.display = '';
+    modalFeedback.className = 'feedback';
+    modalConfirmar.style.display = '';
+    modalConfirmar.disabled = false;
+    modalConfirmar.textContent = 'Confirmar';
+    modalCancelar.textContent = 'Cancelar';
+    modal.classList.add('aberto');
+  });
+
+  modalCancelar.addEventListener('click', fecharModal);
+  modal.addEventListener('click', function (e) { if (e.target === modal) fecharModal(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') fecharModal(); });
+
+  modalConfirmar.addEventListener('click', function () {
+    var nome     = inpTomador.value.trim();
+    var telefone = normalizarTelefone(inpTelefone.value);
+    if (!nome || !telefone) { fecharModal(); return; }
+
+    aEnviar = true;
+    modalConfirmar.disabled = true;
+    modalConfirmar.textContent = 'A enviar…';
+    modalCancelar.disabled = true;
+    modalFeedback.className = 'feedback';
 
     fetch(CONTACTO_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: nome, telefone: telefone, salarios: salarios })
+      body: JSON.stringify({ nome: nome, telefone: telefone, salarios: salariosPreenchidos() })
     })
     .then(function (r) { return r.json().then(function (res) { return { ok: r.ok, res: res }; }); })
     .then(function (x) {
       if (x.ok && x.res && x.res.sucesso) {
-        mostrarFeedback('ok', 'Pedido registado com sucesso. A equipa da NOSSA Seguros vai ligar-lhe brevemente para o ' + telefone.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3') + '.');
+        modalTexto.style.display = 'none';
+        modalFeedback.className = 'feedback ok';
+        modalFeedback.textContent = 'Pedido registado com sucesso. A equipa da NOSSA Seguros vai ligar-lhe brevemente para o ' + formatarTelefone(telefone) + '.';
         if (x.res.cotacao_url) {
           var ligacao = document.createElement('a');
           ligacao.href = x.res.cotacao_url;
           ligacao.target = '_blank';
           ligacao.rel = 'noopener';
           ligacao.textContent = 'Ver a sua cotação em PDF';
-          feedback.appendChild(document.createTextNode(' '));
-          feedback.appendChild(ligacao);
+          modalFeedback.appendChild(document.createTextNode(' '));
+          modalFeedback.appendChild(ligacao);
         }
+        modalConfirmar.style.display = 'none';
+        modalCancelar.textContent = 'Fechar';
+        btnContacto.disabled = true;
         btnContacto.textContent = 'Pedido Enviado';
+        mostrarFeedback('ok', 'Pedido registado com sucesso.');
       } else {
         throw new Error((x.res && x.res.mensagem) || 'resposta inesperada');
       }
     })
     .catch(function (e) {
-      mostrarFeedback('erro', (e && e.message && e.message !== 'resposta inesperada' && e.message.indexOf('fetch') === -1)
+      modalFeedback.className = 'feedback erro';
+      modalFeedback.textContent = (e && e.message && e.message !== 'resposta inesperada' && e.message.indexOf('fetch') === -1)
         ? e.message
-        : 'Não foi possível registar o pedido. Tente novamente ou ligue para o Contact Center: +244 923 190 860.');
-      btnContacto.disabled = false;
-      btnContacto.textContent = 'Quero Ser Contactado';
+        : 'Não foi possível registar o pedido. Tente novamente ou ligue para o Contact Center: +244 923 190 860.';
+      modalConfirmar.disabled = false;
+      modalConfirmar.textContent = 'Confirmar';
+    })
+    .then(function () {
+      aEnviar = false;
+      modalCancelar.disabled = false;
     });
   });
 
