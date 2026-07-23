@@ -5,6 +5,10 @@ services:
     restart: unless-stopped
     ports:
       - "6510:6510"
+    dns:
+      # DNS públicos: o DNS interno do Docker falhava a resolver o domínio da uCall
+      - 8.8.8.8
+      - 1.1.1.1
     environment:
       # definir em .env (copiar de .env.example); nunca commitar a chave
       - UCALL_APIKEY=${UCALL_APIKEY}
