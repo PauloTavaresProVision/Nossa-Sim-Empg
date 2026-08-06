@@ -152,14 +152,19 @@
 
   .empregado-row {
     display: grid;
-    grid-template-columns: minmax(0,1.05fr) minmax(0,.95fr) minmax(7.5rem, 8.5rem) 2.65rem;
-    gap: .7rem;
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr) 2.65rem;
+    gap: .8rem .7rem;
     align-items: end;
-    margin-bottom: .75rem;
+    border: 1px solid var(--borda-suave);
+    background: #FAFBFD;
+    border-radius: 6px;
+    padding: .9rem;
+    margin-bottom: .8rem;
   }
-  @media (max-width: 680px) {
+  .empregado-row .col-nome { grid-column: 1 / -1; }
+  @media (max-width: 480px) {
     .empregado-row { grid-template-columns: minmax(0,1fr) 2.65rem; }
-    .empregado-row .col-nome, .empregado-row .col-funcao { grid-column: 1 / -1; }
+    .empregado-row .col-funcao { grid-column: 1 / -1; }
   }
   .btn-remover {
     height: 2.65rem; width: 2.65rem;
