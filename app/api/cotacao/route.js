@@ -4,10 +4,7 @@
  * contacta a uCall; apenas recalcula os prémios no servidor e devolve o PDF.
  */
 
-import { gerarPdfBytes } from '../../../lib/cotacao-pdf';
-
-const MAX_SALARIOS = 50;
-const SALARIO_MAX  = 1e9;
+import { gerarPdfBytes, normalizarEmpregados } from '../../../lib/cotacao-pdf';
 
 const MAX_PEDIDOS = 20;         // downloads por IP...
 const JANELA_MS   = 10 * 60e3;  // ...nesta janela (10 minutos)
@@ -39,18 +36,13 @@ export async function POST(request) {
 
   const nome = String(corpo.nome || '').trim().slice(0, 100);
 
-  let salarios = Array.isArray(corpo.salarios) ? corpo.salarios : [];
-  salarios = salarios
-    .map((s) => Number(s))
-    .filter((s) => Number.isFinite(s) && s > 0 && s <= SALARIO_MAX)
-    .slice(0, MAX_SALARIOS);
-
-  if (!salarios.length) {
+  const empregados = normalizarEmpregados(corpo);
+  if (!empregados.length) {
     return Response.json({ sucesso: false, mensagem: 'Indique pelo menos um salário para gerar a cotação.' }, { status: 422 });
   }
 
   try {
-    const bytes = await gerarPdfBytes({ nome, telefone: null, salarios });
+    const bytes = await gerarPdfBytes({ nome, telefone: null, empregados });
     return new Response(bytes, {
       status: 200,
       headers: {
@@ -59,7 +51,8 @@ export async function POST(request) {
         'Cache-Control': 'no-store',
       },
     });
-  } catch {
+  } catch (erro) {
+    console.error('[cotacao] falha ao gerar o PDF:', erro && erro.message ? erro.message : erro);
     return Response.json({ sucesso: false, mensagem: 'Não foi possível gerar a cotação. Tente novamente.' }, { status: 500 });
   }
 }

@@ -10,7 +10,7 @@
  * que o header X-Forwarded-For é passado, senão o limite aplica-se globalmente.
  */
 
-import { gerarPdfCotacao, calcularPremios } from '../../../lib/cotacao-pdf';
+import { gerarPdfCotacao, calcularPremios, normalizarEmpregados } from '../../../lib/cotacao-pdf';
 
 const UCALL_API         = process.env.UCALL_API || 'https://apiservicesgocontact.ucall.co.ao/api/v1/GoContact/LoadContacts';
 const UCALL_APIKEY      = process.env.UCALL_APIKEY || '';
@@ -19,9 +19,6 @@ const UCALL_DATABASE_ID = Number(process.env.UCALL_DATABASE_ID || 15622);
 /* URL pública do site, usada para construir o link do PDF enviado ao call center
    (ex.: https://simulador.exemplo.ao). Sem ela, o field11 segue apenas "website". */
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
-
-const MAX_SALARIOS  = 50;
-const SALARIO_MAX   = 1e9;
 
 if (!UCALL_APIKEY) {
   console.warn('[contactar] AVISO: UCALL_APIKEY não definida — o botão "Quero Ser Contactado" vai responder 503 até a variável de ambiente ser configurada (.env / docker-compose).');
@@ -88,18 +85,14 @@ export async function POST(request) {
     return json({ sucesso: false, mensagem: 'Serviço temporariamente indisponível.' }, 503);
   }
 
-  /* salários da simulação (opcionais): validados e recalculados no servidor */
-  let salarios = Array.isArray(corpo.salarios) ? corpo.salarios : [];
-  salarios = salarios
-    .map((s) => Number(s))
-    .filter((s) => Number.isFinite(s) && s > 0 && s <= SALARIO_MAX)
-    .slice(0, MAX_SALARIOS);
+  /* dados dos empregados (opcionais): validados e recalculados no servidor */
+  const empregados = normalizarEmpregados(corpo);
 
   /* gera o PDF da cotação e constrói o link a enviar no field11 */
   let cotacaoUrl = null;
-  if (salarios.length && PUBLIC_BASE_URL) {
+  if (empregados.length && PUBLIC_BASE_URL) {
     try {
-      const id = await gerarPdfCotacao({ nome, telefone, salarios });
+      const id = await gerarPdfCotacao({ nome, telefone, empregados });
       cotacaoUrl = PUBLIC_BASE_URL + '/cotacoes/' + id;
     } catch {
       cotacaoUrl = null; // sem PDF o pedido de contacto segue na mesma
@@ -108,11 +101,11 @@ export async function POST(request) {
 
   /* descrição do pedido para o operador (field7) */
   let field7 = 'Website - Seguro Empregados Domésticos';
-  if (salarios.length) {
-    const premioAnual = calcularPremios(salarios).premioAnual;
+  if (empregados.length) {
+    const premioAnual = calcularPremios(empregados.map((e) => e.salario)).premioAnual;
     const valor = premioAnual.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d),)/g, ' ');
-    field7 += ' - ' + salarios.length + ' empregado' + (salarios.length > 1 ? 's' : '') +
-              ' - Prémio anual ' + valor + ' AOA';
+    field7 += ' - ' + empregados.length + ' empregado' + (empregados.length > 1 ? 's' : '') +
+              ' - Prémio anual ' + valor + ' Kz';
   }
 
   try {

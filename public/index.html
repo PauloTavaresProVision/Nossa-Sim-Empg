@@ -56,8 +56,17 @@
     border-bottom: 4px solid var(--verde);
     color: #fff;
     padding: 2rem 1.25rem;
+    position: relative;
+    overflow: hidden;
   }
-  .faixa-inner { max-width: 1100px; margin: 0 auto; }
+  .faixa-inner { max-width: 1100px; margin: 0 auto; position: relative; }
+  .faixa-ilustracao {
+    position: absolute; right: 0; top: 50%;
+    transform: translateY(-50%);
+    height: 130%; width: auto;
+    pointer-events: none;
+  }
+  @media (max-width: 820px) { .faixa-ilustracao { display: none; } }
   .faixa .categoria {
     font-size: .74rem; font-weight: 700; letter-spacing: .1em;
     text-transform: uppercase; color: var(--verde);
@@ -107,7 +116,7 @@
     display: block; margin-bottom: .3rem;
   }
   label .opc { font-weight: 400; color: var(--texto-claro); }
-  input[type="text"], input[type="tel"] {
+  input[type="text"], input[type="tel"], select {
     width: 100%;
     height: 2.65rem;
     padding: 0 .8rem;
@@ -118,11 +127,17 @@
     color: var(--texto);
     background: var(--branco);
   }
+  select { padding-right: .4rem; }
   input::placeholder { color: #A9B1C7; }
-  input:focus {
+  input:focus, select:focus {
     outline: none;
     border-color: var(--navy);
     box-shadow: 0 0 0 3px rgba(16,46,96,.12);
+  }
+  .obrigatorio { color: #B03A2E; }
+  .legenda-obrigatorio {
+    font-size: .74rem; color: var(--texto-claro);
+    margin: .2rem 0 .9rem;
   }
   .campo { margin-bottom: 1rem; }
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -137,14 +152,14 @@
 
   .empregado-row {
     display: grid;
-    grid-template-columns: minmax(0,1fr) minmax(8rem, 10rem) 2.65rem;
+    grid-template-columns: minmax(0,1.05fr) minmax(0,.95fr) minmax(7.5rem, 8.5rem) 2.65rem;
     gap: .7rem;
     align-items: end;
     margin-bottom: .75rem;
   }
-  @media (max-width: 560px) {
+  @media (max-width: 680px) {
     .empregado-row { grid-template-columns: minmax(0,1fr) 2.65rem; }
-    .empregado-row .col-desc { grid-column: 1 / -1; }
+    .empregado-row .col-nome, .empregado-row .col-funcao { grid-column: 1 / -1; }
   }
   .btn-remover {
     height: 2.65rem; width: 2.65rem;
@@ -408,10 +423,28 @@
 </header>
 
 <section class="faixa">
+  <svg class="faixa-ilustracao" viewBox="0 0 420 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- casa -->
+    <path d="M255 120 L330 58 L405 120 V210 H255 Z"/>
+    <path d="M310 210 V160 H350 V210"/>
+    <path d="M330 58 V40 H352 V76"/>
+    <!-- coração dentro da casa -->
+    <path d="M330 142 c-4 -9 -18 -9 -18 2 c0 8 10 13 18 20 c8 -7 18 -12 18 -20 c0 -11 -14 -11 -18 -2 z" stroke="rgba(127,190,61,.35)"/>
+    <!-- vassoura -->
+    <path d="M60 34 L104 118"/>
+    <path d="M98 108 L134 156 L84 170 L74 132 Z"/>
+    <path d="M96 132 L106 158 M112 124 L124 152"/>
+    <!-- ferro de engomar -->
+    <path d="M150 196 h74 a14 14 0 0 1 14 14 v10 H136 v-4 a20 20 0 0 1 14 -20 z"/>
+    <path d="M166 196 a22 16 0 0 1 42 0"/>
+    <!-- panela -->
+    <path d="M52 196 h64 v26 a10 10 0 0 1 -10 10 h-44 a10 10 0 0 1 -10 -10 z"/>
+    <path d="M44 196 h80 M52 188 h64 M84 180 v-6"/>
+  </svg>
   <div class="faixa-inner">
     <div class="categoria">Acidentes de Trabalho</div>
     <h1>Simulador de Seguro de Empregados Domésticos</h1>
-    <p>Indique o salário mensal do seu empregado doméstico e obtenha de imediato o valor do prémio anual, semestral, trimestral e mensal. Simulação gratuita e sem compromisso.</p>
+    <p>Indique o salário mensal do seu empregado doméstico e obtenha de imediato o valor do prémio. Simulação gratuita e sem compromisso.</p>
   </div>
 </section>
 
@@ -431,12 +464,13 @@
       </div>
     </div>
 
-    <p class="subtitulo">Empregados e salários mensais (AOA)</p>
+    <p class="subtitulo">Dados do(a) Empregado(a)</p>
     <div id="lista-empregados"></div>
-    <button type="button" class="btn-add" id="btn-add">Adicionar empregado</button>
+    <p class="legenda-obrigatorio"><span class="obrigatorio">*</span> Campo de preenchimento obrigatório</p>
+    <button type="button" class="btn-add" id="btn-add">Adicionar empregado(a)</button>
 
     <div class="nota">
-      <strong>Nota:</strong> a massa salarial anual é calculada sobre <strong>13 salários</strong> (12 meses e subsídio), conforme o modelo de cotação da NOSSA Seguros. Prémios exclusivamente em AOA.
+      <strong>Nota:</strong> a massa salarial anual é calculada sobre <strong>13 salários</strong> (12 meses e subsídio), conforme o modelo de cotação da NOSSA Seguros. Prémios exclusivamente em Kz.
     </div>
   </section>
 
@@ -446,20 +480,18 @@
 
     <table class="tabela-resumo">
       <tr><td>N.º de empregados</td><td id="r-num">1</td></tr>
-      <tr><td>Massa salarial mensal</td><td id="r-mensal">0,00 AOA</td></tr>
-      <tr><td>Massa salarial anual (13 salários)</td><td id="r-anual">0,00 AOA</td></tr>
-      <tr><td>Taxa simples aplicada</td><td id="r-taxa">2%</td></tr>
+      <tr><td>Massa salarial mensal</td><td id="r-mensal">0,00 Kz</td></tr>
+      <tr><td>Massa salarial anual (13 salários)</td><td id="r-anual">0,00 Kz</td></tr>
     </table>
 
     <div class="premio-principal">
       <div class="rotulo">Prémio Anual</div>
-      <div class="valor"><span id="p-anual">0,00</span> <small>AOA</small></div>
+      <div class="valor"><span id="p-anual">0,00</span> <small>Kz</small></div>
     </div>
 
     <table class="tabela-premios">
-      <tr><td>Prémio semestral (2 pagamentos)</td><td><span id="p-semestral">0,00</span> <span class="aoa">AOA</span></td></tr>
-      <tr><td>Prémio trimestral (4 pagamentos)</td><td><span id="p-trimestral">0,00</span> <span class="aoa">AOA</span></td></tr>
-      <tr><td>Prémio mensal (12 pagamentos)</td><td><span id="p-mensal">0,00</span> <span class="aoa">AOA</span></td></tr>
+      <tr><td>Prémio semestral</td><td><span id="p-semestral">0,00</span> <span class="aoa">Kz</span></td></tr>
+      <tr><td>Prémio trimestral</td><td><span id="p-trimestral">0,00</span> <span class="aoa">Kz</span></td></tr>
     </table>
 
     <button type="button" class="btn-primary" id="btn-imprimir">Guardar Cotação em PDF</button>
@@ -492,9 +524,7 @@
   </section>
 
   <div class="legal">
-    <p><strong>Modalidade Folha de Salários:</strong> o prémio de seguro é estabelecido de acordo com a estimativa da massa salarial anual inicialmente comunicada. Periodicamente procede-se ao acerto de prémio de acordo com os valores mensalmente informados nas folhas de salários.</p>
-    <p><strong>Prémio Fixo:</strong> ficam seguros os trabalhadores e respectivas remunerações conforme informação do Tomador. Quaisquer alterações do quadro de pessoal ou remuneratórias deverão ser obrigatoriamente comunicadas à Seguradora.</p>
-    <p>Esta simulação tem carácter meramente informativo e não constitui proposta contratual. Os valores apresentados resultam da aplicação da taxa em vigor à massa salarial indicada e poderão ser ajustados na emissão da apólice.</p>
+    <p>Esta simulação tem carácter meramente informativo e não constitui proposta contratual. Os valores apresentados poderão ser ajustados na emissão da apólice.</p>
   </div>
 </main>
 
@@ -567,18 +597,26 @@
   }
 
   /* --------- linhas de empregados --------- */
+  var FUNCOES = ['Babá', 'Cozinheiro(a)', 'Engomadeiro(a)', 'Empregado(a) Doméstico(a)', 'Doméstico(a)', 'Jardineiro(a)', 'Lavadeiro(a)', 'Motorista', 'Porteiro', 'Outra'];
+
   var contador = 0;
   function addEmpregado(salarioInicial) {
     contador++;
+    var opcoes = '<option value="">Seleccione</option>';
+    FUNCOES.forEach(function (f) { opcoes += '<option value="' + f + '">' + f + '</option>'; });
     var row = document.createElement('div');
     row.className = 'empregado-row';
     row.innerHTML =
-      '<div class="col-desc">' +
-        '<label>Descrição</label>' +
-        '<input type="text" class="inp-desc" placeholder="Empregado ' + contador + '">' +
+      '<div class="col-nome">' +
+        '<label>Nome</label>' +
+        '<input type="text" class="inp-nome" placeholder="Nome do(a) empregado(a)" autocomplete="off">' +
       '</div>' +
-      '<div>' +
-        '<label>Salário mensal</label>' +
+      '<div class="col-funcao">' +
+        '<label>Função</label>' +
+        '<select class="inp-funcao">' + opcoes + '</select>' +
+      '</div>' +
+      '<div class="col-salario">' +
+        '<label>Salário mensal (Kz) <span class="obrigatorio">*</span></label>' +
         '<input type="text" inputmode="numeric" class="inp-salario" placeholder="100 000" value="' + (salarioInicial || '') + '">' +
       '</div>' +
       '<button type="button" class="btn-remover" title="Remover" aria-label="Remover empregado">&#10005;</button>';
@@ -613,29 +651,22 @@
 
     var massaAnual       = massaMensal * MESES_ANO;
     var premioAnual      = massaAnual * TAXA_SIMPLES;
-    var premioMensal     = premioAnual / 12;
-    var premioTrimestral = premioMensal * 3;
-    var premioSemestral  = premioMensal * 6;
+    var premioSemestral  = premioAnual / 2;
+    var premioTrimestral = premioAnual / 4;
 
     document.getElementById('r-num').textContent    = String(Math.max(comSalario, inputs.length ? 1 : 0));
-    document.getElementById('r-taxa').textContent   = (TAXA_SIMPLES * 100).toLocaleString('pt-PT') + '%';
-    document.getElementById('r-mensal').textContent = formatAOA(massaMensal) + ' AOA';
-    document.getElementById('r-anual').textContent  = formatAOA(massaAnual) + ' AOA';
+    document.getElementById('r-mensal').textContent = formatAOA(massaMensal) + ' Kz';
+    document.getElementById('r-anual').textContent  = formatAOA(massaAnual) + ' Kz';
 
     document.getElementById('p-anual').textContent      = formatAOA(premioAnual);
     document.getElementById('p-semestral').textContent  = formatAOA(premioSemestral);
     document.getElementById('p-trimestral').textContent = formatAOA(premioTrimestral);
-    document.getElementById('p-mensal').textContent     = formatAOA(premioMensal);
   }
 
   /* --------- guardar cotação em PDF (gerado no servidor) --------- */
   btnImprimir.addEventListener('click', function () {
-    var salarios = [];
-    lista.querySelectorAll('.inp-salario').forEach(function (inp) {
-      var s = parseSalario(inp);
-      if (s > 0) salarios.push(s);
-    });
-    if (!salarios.length) {
+    var empregados = empregadosPreenchidos();
+    if (!empregados.length) {
       alert('Indique pelo menos um salário para gerar a cotação.');
       return;
     }
@@ -649,7 +680,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         nome: document.getElementById('tomador').value.trim(),
-        salarios: salarios
+        empregados: empregados
       })
     })
     .then(function (r) {
@@ -707,13 +738,19 @@
 
   function formatarTelefone(t) { return t.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3'); }
 
-  function salariosPreenchidos() {
-    var salarios = [];
-    lista.querySelectorAll('.inp-salario').forEach(function (inp) {
-      var s = parseSalario(inp);
-      if (s > 0) salarios.push(s);
+  function empregadosPreenchidos() {
+    var empregados = [];
+    lista.querySelectorAll('.empregado-row').forEach(function (row) {
+      var s = parseSalario(row.querySelector('.inp-salario'));
+      if (s > 0) {
+        empregados.push({
+          nome: row.querySelector('.inp-nome').value.trim(),
+          funcao: row.querySelector('.inp-funcao').value,
+          salario: s
+        });
+      }
     });
-    return salarios;
+    return empregados;
   }
 
   function fecharModal() {
@@ -738,12 +775,12 @@
     feedback.className = 'feedback';
 
     /* prepara e abre o pop-up de confirmação */
-    var salarios = salariosPreenchidos();
+    var empregados = empregadosPreenchidos();
     modalNome.textContent     = nome;
     modalTelefone.textContent = formatarTelefone(telefone);
-    if (salarios.length) {
+    if (empregados.length) {
       modalLinhaPremio.style.display = '';
-      modalPremio.textContent = document.getElementById('p-anual').textContent + ' AOA';
+      modalPremio.textContent = document.getElementById('p-anual').textContent + ' Kz';
     } else {
       modalLinhaPremio.style.display = 'none';
     }
@@ -774,7 +811,7 @@
     fetch(CONTACTO_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: nome, telefone: telefone, salarios: salariosPreenchidos() })
+      body: JSON.stringify({ nome: nome, telefone: telefone, empregados: empregadosPreenchidos() })
     })
     .then(function (r) { return r.json().then(function (res) { return { ok: r.ok, res: res }; }); })
     .then(function (x) {
