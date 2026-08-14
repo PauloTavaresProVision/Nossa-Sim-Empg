@@ -36,13 +36,18 @@ export async function POST(request) {
 
   const nome = String(corpo.nome || '').trim().slice(0, 100);
 
+  /* telefone é opcional no download; se vier válido, entra no PDF */
+  let telefone = String(corpo.telefone || '').replace(/\D/g, '');
+  if (telefone.startsWith('244') && telefone.length === 12) telefone = telefone.slice(3);
+  if (!/^9\d{8}$/.test(telefone)) telefone = null;
+
   const empregados = normalizarEmpregados(corpo);
   if (!empregados.length) {
     return Response.json({ sucesso: false, mensagem: 'Indique pelo menos um salário para gerar a cotação.' }, { status: 422 });
   }
 
   try {
-    const bytes = await gerarPdfBytes({ nome, telefone: null, empregados });
+    const bytes = await gerarPdfBytes({ nome, telefone, empregados });
     return new Response(bytes, {
       status: 200,
       headers: {

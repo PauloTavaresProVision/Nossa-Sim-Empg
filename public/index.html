@@ -61,9 +61,9 @@
   }
   .faixa-inner { max-width: 1100px; margin: 0 auto; position: relative; }
   .faixa-ilustracao {
-    position: absolute; right: 0; top: 50%;
+    position: absolute; right: .5rem; top: 50%;
     transform: translateY(-50%);
-    height: 130%; width: auto;
+    height: 88%; width: auto;
     pointer-events: none;
   }
   @media (max-width: 820px) { .faixa-ilustracao { display: none; } }
@@ -428,24 +428,7 @@
 </header>
 
 <section class="faixa">
-  <svg class="faixa-ilustracao" viewBox="0 0 420 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <!-- casa -->
-    <path d="M255 120 L330 58 L405 120 V210 H255 Z"/>
-    <path d="M310 210 V160 H350 V210"/>
-    <path d="M330 58 V40 H352 V76"/>
-    <!-- coração dentro da casa -->
-    <path d="M330 142 c-4 -9 -18 -9 -18 2 c0 8 10 13 18 20 c8 -7 18 -12 18 -20 c0 -11 -14 -11 -18 -2 z" stroke="rgba(127,190,61,.35)"/>
-    <!-- vassoura -->
-    <path d="M60 34 L104 118"/>
-    <path d="M98 108 L134 156 L84 170 L74 132 Z"/>
-    <path d="M96 132 L106 158 M112 124 L124 152"/>
-    <!-- ferro de engomar -->
-    <path d="M150 196 h74 a14 14 0 0 1 14 14 v10 H136 v-4 a20 20 0 0 1 14 -20 z"/>
-    <path d="M166 196 a22 16 0 0 1 42 0"/>
-    <!-- panela -->
-    <path d="M52 196 h64 v26 a10 10 0 0 1 -10 10 h-44 a10 10 0 0 1 -10 -10 z"/>
-    <path d="M44 196 h80 M52 188 h64 M84 180 v-6"/>
-  </svg>
+  <img class="faixa-ilustracao" src="ilustracao-empregada.png" alt="">
   <div class="faixa-inner">
     <div class="categoria">Acidentes de Trabalho</div>
     <h1>Simulador de Seguro de Empregados Domésticos</h1>
@@ -685,6 +668,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         nome: document.getElementById('tomador').value.trim(),
+        telefone: document.getElementById('telefone').value,
         empregados: empregados
       })
     })
