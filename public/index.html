@@ -520,7 +520,6 @@
     <table class="tabela-premios">
       <tr><td>Prémio anual</td><td><span id="p-anual">0,00</span> <span class="aoa">Kz</span></td></tr>
       <tr><td>Prémio semestral</td><td><span id="p-semestral">0,00</span> <span class="aoa">Kz</span></td></tr>
-      <tr><td>Prémio trimestral</td><td><span id="p-trimestral">0,00</span> <span class="aoa">Kz</span></td></tr>
     </table>
 
     <button type="button" class="btn-primary" id="btn-imprimir">Guardar Cotação em PDF</button>
@@ -719,8 +718,7 @@
     var massaAnual       = massaMensal * nSalarios;
     var premioAnual      = massaAnual * TAXA_SIMPLES * FACTOR_COMERCIAL * (1 - DESCONTO);
     var premioSemestral  = premioAnual / 2;
-    var premioTrimestral = premioAnual / 4;
-    var premios = { anual: premioAnual, semestral: premioSemestral, trimestral: premioTrimestral };
+    var premios = { anual: premioAnual, semestral: premioSemestral };
 
     document.getElementById('r-num').textContent    = String(Math.max(comSalario, inputs.length ? 1 : 0));
     document.getElementById('r-mensal').textContent = formatAOA(massaMensal) + ' Kz';
@@ -731,7 +729,6 @@
     document.getElementById('p-apagar').textContent = formatAOA(premios[selForma.value]);
     document.getElementById('p-anual').textContent      = formatAOA(premioAnual);
     document.getElementById('p-semestral').textContent  = formatAOA(premioSemestral);
-    document.getElementById('p-trimestral').textContent = formatAOA(premioTrimestral);
   }
 
   /* opções: recalculam e actualizam os rótulos dos salários */
