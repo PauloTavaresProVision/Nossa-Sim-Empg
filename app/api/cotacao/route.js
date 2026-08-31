@@ -4,7 +4,7 @@
  * contacta a uCall; apenas recalcula os prémios no servidor e devolve o PDF.
  */
 
-import { gerarPdfBytes, normalizarEmpregados } from '../../../lib/cotacao-pdf';
+import { gerarPdfBytes, normalizarEmpregados, normalizarOpcoes } from '../../../lib/cotacao-pdf';
 
 const MAX_PEDIDOS = 20;         // downloads por IP...
 const JANELA_MS   = 10 * 60e3;  // ...nesta janela (10 minutos)
@@ -47,7 +47,7 @@ export async function POST(request) {
   }
 
   try {
-    const bytes = await gerarPdfBytes({ nome, telefone, empregados });
+    const bytes = await gerarPdfBytes({ nome, telefone, empregados, opcoes: normalizarOpcoes(corpo) });
     return new Response(bytes, {
       status: 200,
       headers: {

@@ -10,7 +10,7 @@
  * que o header X-Forwarded-For é passado, senão o limite aplica-se globalmente.
  */
 
-import { gerarPdfCotacao, calcularPremios, normalizarEmpregados } from '../../../lib/cotacao-pdf';
+import { gerarPdfCotacao, calcularPremios, normalizarEmpregados, normalizarOpcoes, FORMAS_PAGAMENTO } from '../../../lib/cotacao-pdf';
 
 const UCALL_API         = process.env.UCALL_API || 'https://apiservicesgocontact.ucall.co.ao/api/v1/GoContact/LoadContacts';
 const UCALL_APIKEY      = process.env.UCALL_APIKEY || '';
@@ -87,12 +87,13 @@ export async function POST(request) {
 
   /* dados dos empregados (opcionais): validados e recalculados no servidor */
   const empregados = normalizarEmpregados(corpo);
+  const opcoes = normalizarOpcoes(corpo);
 
   /* gera o PDF da cotação e constrói o link a enviar no field11 */
   let cotacaoUrl = null;
   if (empregados.length && PUBLIC_BASE_URL) {
     try {
-      const id = await gerarPdfCotacao({ nome, telefone, empregados });
+      const id = await gerarPdfCotacao({ nome, telefone, empregados, opcoes });
       cotacaoUrl = PUBLIC_BASE_URL + '/cotacoes/' + id;
     } catch {
       cotacaoUrl = null; // sem PDF o pedido de contacto segue na mesma
@@ -102,10 +103,12 @@ export async function POST(request) {
   /* descrição do pedido para o operador (field7) */
   let field7 = 'Website - Seguro Empregados Domésticos';
   if (empregados.length) {
-    const premioAnual = calcularPremios(empregados.map((e) => e.salario)).premioAnual;
+    const premioAnual = calcularPremios(empregados.map((e) => e.salario), opcoes).premioAnual;
     const valor = premioAnual.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d),)/g, ' ');
     field7 += ' - ' + empregados.length + ' empregado' + (empregados.length > 1 ? 's' : '') +
-              ' - Prémio anual ' + valor + ' Kz';
+              ' - Prémio anual ' + valor + ' Kz' +
+              ' - Pagamento ' + FORMAS_PAGAMENTO[opcoes.formaPagamento];
+    if (opcoes.inicio) field7 += ' - Início ' + opcoes.inicio.split('-').reverse().join('/');
   }
 
   try {

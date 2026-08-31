@@ -119,7 +119,7 @@
     display: block; margin-bottom: .3rem;
   }
   label .opc { font-weight: 400; color: var(--texto-claro); }
-  input[type="text"], input[type="tel"], select {
+  input[type="text"], input[type="tel"], input[type="date"], select {
     width: 100%;
     height: 2.65rem;
     padding: 0 .8rem;
@@ -459,13 +459,47 @@
       </div>
     </div>
 
+    <p class="subtitulo">Opções da Simulação</p>
+    <div class="grid-2">
+      <div class="campo">
+        <label for="forma-pagamento">Forma de Pagamento <span class="obrigatorio">*</span></label>
+        <select id="forma-pagamento">
+          <option value="anual" selected>Anual</option>
+          <option value="semestral">Semestral</option>
+          <option value="trimestral">Trimestral</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="inicio">Início do seguro</label>
+        <input type="date" id="inicio">
+      </div>
+      <div class="campo">
+        <label for="n-salarios">N.º de salários</label>
+        <select id="n-salarios">
+          <option value="12">12 Meses / Ano</option>
+          <option value="13" selected>13 Meses / Ano</option>
+          <option value="13.5">13,5 Meses / Ano</option>
+          <option value="14">14 Meses / Ano</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="tipo-salarios">Tipo de salários</label>
+        <select id="tipo-salarios">
+          <option value="mensal" selected>Mensal</option>
+          <option value="anual">Anual</option>
+          <option value="semanal">Semanal</option>
+          <option value="diario">Diário</option>
+        </select>
+      </div>
+    </div>
+
     <p class="subtitulo">Dados do(a) Empregado(a)</p>
     <div id="lista-empregados"></div>
     <p class="legenda-obrigatorio"><span class="obrigatorio">*</span> Campo de preenchimento obrigatório</p>
     <button type="button" class="btn-add" id="btn-add">Adicionar empregado(a)</button>
 
     <div class="nota">
-      <strong>Nota:</strong> a massa salarial anual é calculada sobre <strong>13 salários</strong> (12 meses e subsídio), conforme o modelo de cotação da NOSSA Seguros. Prémios exclusivamente em Kz.
+      <strong>Nota:</strong> a massa salarial anual é calculada sobre o <strong>n.º de salários seleccionado</strong> (por omissão 13: 12 meses e subsídio), conforme o modelo de cotação da NOSSA Seguros. Prémios exclusivamente em Kz.
     </div>
   </section>
 
@@ -476,15 +510,16 @@
     <table class="tabela-resumo">
       <tr><td>N.º de empregados</td><td id="r-num">1</td></tr>
       <tr><td>Massa salarial mensal</td><td id="r-mensal">0,00 Kz</td></tr>
-      <tr><td>Massa salarial anual (13 salários)</td><td id="r-anual">0,00 Kz</td></tr>
+      <tr><td id="r-anual-rotulo">Massa salarial anual (13 salários)</td><td id="r-anual">0,00 Kz</td></tr>
     </table>
 
     <div class="premio-principal">
-      <div class="rotulo">Prémio Anual</div>
-      <div class="valor"><span id="p-anual">0,00</span> <small>Kz</small></div>
+      <div class="rotulo">Prémio Total a Pagar <span id="p-forma">(Anual)</span></div>
+      <div class="valor"><span id="p-apagar">0,00</span> <small>Kz</small></div>
     </div>
 
     <table class="tabela-premios">
+      <tr><td>Prémio anual</td><td><span id="p-anual">0,00</span> <span class="aoa">Kz</span></td></tr>
       <tr><td>Prémio semestral</td><td><span id="p-semestral">0,00</span> <span class="aoa">Kz</span></td></tr>
       <tr><td>Prémio trimestral</td><td><span id="p-trimestral">0,00</span> <span class="aoa">Kz</span></td></tr>
     </table>
@@ -557,7 +592,7 @@
     <table class="modal-dados">
       <tr><td>Nome</td><td id="modal-nome"></td></tr>
       <tr><td>Telefone</td><td id="modal-telefone"></td></tr>
-      <tr id="modal-linha-premio"><td>Prémio anual simulado</td><td id="modal-premio"></td></tr>
+      <tr id="modal-linha-premio"><td id="modal-premio-rotulo">Prémio total a pagar</td><td id="modal-premio"></td></tr>
     </table>
     <div class="feedback" id="modal-feedback" role="status"></div>
     <div class="modal-acoes">
@@ -571,9 +606,22 @@
 (function () {
   'use strict';
 
-  /* ================= Parâmetros do modelo (base: Excel NOSSA) ================= */
-  var TAXA_SIMPLES = 0.02;   // 2% sobre a massa salarial anual
-  var MESES_ANO    = 13;     // salário anual = mensal × 13
+  /* ================= Parâmetros do modelo (Excel "Simulador VF") =================
+     Prémio Anual = Massa Anual × 2% × 1,425 × (1 − 15%)
+     Massa Anual  = salário mensal equivalente × n.º de salários                 */
+  var TAXA_SIMPLES     = 0.02;
+  var FACTOR_COMERCIAL = 1.425;
+  var DESCONTO         = 0.15;
+
+  /* conversão do salário introduzido para equivalente mensal, por tipo */
+  var PARA_MENSAL = {
+    mensal:  function (v) { return v; },
+    anual:   function (v) { return v / 12; },
+    semanal: function (v) { return v * 52 / 12; },
+    diario:  function (v) { return v * 26; }
+  };
+  var ROTULO_TIPO = { mensal: 'mensal', anual: 'anual', semanal: 'semanal', diario: 'diário' };
+  var ROTULO_FORMA = { anual: 'Anual', semestral: 'Semestral', trimestral: 'Trimestral' };
 
   /* ================= Pedido de contacto =================
      O envio passa pelo endpoint /api/contactar no servidor (server.js ou
@@ -584,6 +632,29 @@
   var lista       = document.getElementById('lista-empregados');
   var btnAdd      = document.getElementById('btn-add');
   var btnImprimir = document.getElementById('btn-imprimir');
+
+  /* opções da simulação */
+  var selForma  = document.getElementById('forma-pagamento');
+  var selInicio = document.getElementById('inicio');
+  var selN      = document.getElementById('n-salarios');
+  var selTipo   = document.getElementById('tipo-salarios');
+
+  /* início do seguro: por omissão hoje, nunca no passado */
+  (function () {
+    var hoje = new Date();
+    var iso = hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0') + '-' + String(hoje.getDate()).padStart(2, '0');
+    selInicio.value = iso;
+    selInicio.min = iso;
+  })();
+
+  function opcoesSimulacao() {
+    return {
+      formaPagamento: selForma.value,
+      inicio: selInicio.value || null,
+      nSalarios: parseFloat(selN.value),
+      tipoSalario: selTipo.value
+    };
+  }
 
   /* formata sempre com separador de milhares: 3 900,00 */
   function formatAOA(v) {
@@ -611,7 +682,7 @@
         '<select class="inp-funcao">' + opcoes + '</select>' +
       '</div>' +
       '<div class="col-salario">' +
-        '<label>Salário mensal (Kz) <span class="obrigatorio">*</span></label>' +
+        '<label class="lbl-salario">Salário ' + ROTULO_TIPO[selTipo.value] + ' (Kz) <span class="obrigatorio">*</span></label>' +
         '<input type="text" inputmode="numeric" class="inp-salario" placeholder="100 000" value="' + (salarioInicial || '') + '">' +
       '</div>' +
       '<button type="button" class="btn-remover" title="Remover" aria-label="Remover empregado">&#10005;</button>';
@@ -637,26 +708,42 @@
   /* --------- cálculo --------- */
   function calcular() {
     var inputs = lista.querySelectorAll('.inp-salario');
+    var tipo = selTipo.value;
+    var nSalarios = parseFloat(selN.value);
     var massaMensal = 0, comSalario = 0;
     inputs.forEach(function (inp) {
       var s = parseSalario(inp);
       if (s > 0) comSalario++;
-      massaMensal += s;
+      massaMensal += PARA_MENSAL[tipo](s);
     });
 
-    var massaAnual       = massaMensal * MESES_ANO;
-    var premioAnual      = massaAnual * TAXA_SIMPLES;
+    var massaAnual       = massaMensal * nSalarios;
+    var premioAnual      = massaAnual * TAXA_SIMPLES * FACTOR_COMERCIAL * (1 - DESCONTO);
     var premioSemestral  = premioAnual / 2;
     var premioTrimestral = premioAnual / 4;
+    var premios = { anual: premioAnual, semestral: premioSemestral, trimestral: premioTrimestral };
 
     document.getElementById('r-num').textContent    = String(Math.max(comSalario, inputs.length ? 1 : 0));
     document.getElementById('r-mensal').textContent = formatAOA(massaMensal) + ' Kz';
+    document.getElementById('r-anual-rotulo').textContent = 'Massa salarial anual (' + String(nSalarios).replace('.', ',') + ' salários)';
     document.getElementById('r-anual').textContent  = formatAOA(massaAnual) + ' Kz';
 
+    document.getElementById('p-forma').textContent  = '(' + ROTULO_FORMA[selForma.value] + ')';
+    document.getElementById('p-apagar').textContent = formatAOA(premios[selForma.value]);
     document.getElementById('p-anual').textContent      = formatAOA(premioAnual);
     document.getElementById('p-semestral').textContent  = formatAOA(premioSemestral);
     document.getElementById('p-trimestral').textContent = formatAOA(premioTrimestral);
   }
+
+  /* opções: recalculam e actualizam os rótulos dos salários */
+  [selForma, selN, selTipo].forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      document.querySelectorAll('.lbl-salario').forEach(function (l) {
+        l.innerHTML = 'Salário ' + ROTULO_TIPO[selTipo.value] + ' (Kz) <span class="obrigatorio">*</span>';
+      });
+      calcular();
+    });
+  });
 
   /* --------- guardar cotação em PDF (gerado no servidor) --------- */
   btnImprimir.addEventListener('click', function () {
@@ -673,11 +760,11 @@
     fetch('/api/cotacao', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: JSON.stringify(Object.assign({
         nome: document.getElementById('tomador').value.trim(),
         telefone: document.getElementById('telefone').value,
         empregados: empregados
-      })
+      }, opcoesSimulacao()))
     })
     .then(function (r) {
       if (!r.ok) throw new Error('erro ' + r.status);
@@ -776,7 +863,8 @@
     modalTelefone.textContent = formatarTelefone(telefone);
     if (empregados.length) {
       modalLinhaPremio.style.display = '';
-      modalPremio.textContent = document.getElementById('p-anual').textContent + ' Kz';
+      document.getElementById('modal-premio-rotulo').textContent = 'Prémio total a pagar ' + document.getElementById('p-forma').textContent;
+      modalPremio.textContent = document.getElementById('p-apagar').textContent + ' Kz';
     } else {
       modalLinhaPremio.style.display = 'none';
     }
@@ -807,7 +895,7 @@
     fetch(CONTACTO_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: nome, telefone: telefone, empregados: empregadosPreenchidos() })
+      body: JSON.stringify(Object.assign({ nome: nome, telefone: telefone, empregados: empregadosPreenchidos() }, opcoesSimulacao()))
     })
     .then(function (r) { return r.json().then(function (res) { return { ok: r.ok, res: res }; }); })
     .then(function (x) {
