@@ -466,7 +466,6 @@
         <select id="forma-pagamento">
           <option value="anual" selected>Anual</option>
           <option value="semestral">Semestral</option>
-          <option value="trimestral">Trimestral</option>
         </select>
       </div>
       <div class="campo">
@@ -621,7 +620,7 @@
     diario:  function (v) { return v * 26; }
   };
   var ROTULO_TIPO = { mensal: 'mensal', anual: 'anual', semanal: 'semanal', diario: 'diário' };
-  var ROTULO_FORMA = { anual: 'Anual', semestral: 'Semestral', trimestral: 'Trimestral' };
+  var ROTULO_FORMA = { anual: 'Anual', semestral: 'Semestral' };
 
   /* ================= Pedido de contacto =================
      O envio passa pelo endpoint /api/contactar no servidor (server.js ou
