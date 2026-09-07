@@ -85,6 +85,17 @@ export async function POST(request) {
     return json({ sucesso: false, mensagem: 'Serviço temporariamente indisponível.' }, 503);
   }
 
+  /* preferência de contacto (Quero Saber Mais): chamada/whatsapp ou email */
+  const preferencia = corpo.preferencia === 'email' ? 'email' : 'chamada';
+  let email = String(corpo.email || '').trim().slice(0, 100);
+  if (preferencia === 'email') {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      return json({ sucesso: false, mensagem: 'Indique um email válido.' }, 422);
+    }
+  } else {
+    email = '';
+  }
+
   /* dados dos empregados (opcionais): validados e recalculados no servidor */
   const empregados = normalizarEmpregados(corpo);
   const opcoes = normalizarOpcoes(corpo);
@@ -102,6 +113,7 @@ export async function POST(request) {
 
   /* descrição do pedido para o operador (field7) */
   let field7 = 'Website - Seguro Empregados Domésticos';
+  field7 += preferencia === 'email' ? ' - Prefere EMAIL: ' + email : ' - Prefere Chamada/WhatsApp';
   if (empregados.length) {
     const premioAnual = calcularPremios(empregados.map((e) => e.salario), opcoes).premioAnual;
     const valor = premioAnual.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d),)/g, ' ');

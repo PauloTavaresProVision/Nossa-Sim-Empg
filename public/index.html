@@ -266,9 +266,37 @@
     padding-top: 1.1rem;
     border-top: 1px solid var(--borda-suave);
   }
-  .contacto-bloco p {
-    font-size: .82rem; color: var(--texto-suave); margin-bottom: .7rem;
+  [hidden] { display: none !important; }
+  .botoes-cta { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+  @media (max-width: 420px) { .botoes-cta { grid-template-columns: 1fr; } }
+  .btn-saber-mais {
+    display: block; width: 100%;
+    background: var(--branco); color: var(--navy);
+    border: 1px solid var(--navy);
+    height: 2.9rem; border-radius: 4px;
+    font-size: .82rem; font-weight: 700; font-family: inherit;
+    text-transform: uppercase; letter-spacing: .06em;
+    cursor: pointer;
   }
+  .btn-saber-mais:hover { background: var(--fundo); }
+  .painel-saber-mais {
+    border: 1px solid var(--borda-suave);
+    background: #FAFBFD;
+    border-radius: 6px;
+    padding: .9rem;
+    margin-top: .8rem;
+  }
+  .painel-titulo {
+    font-size: .82rem; font-weight: 700; color: var(--navy-escuro);
+    margin-bottom: .6rem;
+  }
+  .opcoes-preferencia {
+    display: flex; gap: 1.4rem; flex-wrap: wrap;
+    margin-bottom: .8rem;
+    font-size: .86rem; color: var(--texto-suave);
+  }
+  .opcoes-preferencia label { display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; }
+  .opcoes-preferencia input { accent-color: var(--verde); }
   .btn-contacto {
     display: block; width: 100%;
     background: var(--navy); color: #fff; border: none;
@@ -482,7 +510,7 @@
         </select>
       </div>
       <div class="campo">
-        <label for="tipo-salarios">Tipo de salários</label>
+        <label for="tipo-salarios">Tipo de salários <span class="obrigatorio">**</span></label>
         <select id="tipo-salarios">
           <option value="mensal" selected>Mensal</option>
           <option value="anual">Anual</option>
@@ -494,7 +522,10 @@
 
     <p class="subtitulo">Dados do(a) Empregado(a)</p>
     <div id="lista-empregados"></div>
-    <p class="legenda-obrigatorio"><span class="obrigatorio">*</span> Campo de preenchimento obrigatório</p>
+    <p class="legenda-obrigatorio">
+      <span class="obrigatorio">*</span> Campo de preenchimento obrigatório<br>
+      <span class="obrigatorio">**</span> Indique a forma de pagamento de salários.
+    </p>
     <button type="button" class="btn-add" id="btn-add">Adicionar empregado(a)</button>
 
     <div class="nota">
@@ -525,8 +556,28 @@
     <button type="button" class="btn-primary" id="btn-imprimir">Guardar Cotação em PDF</button>
 
     <div class="contacto-bloco">
-      <p>Prefere falar com a NOSSA? Preencha o <strong>nome</strong> e o <strong>telefone</strong> na secção Dados da Simulação e a nossa equipa liga-lhe.</p>
-      <button type="button" class="btn-contacto" id="btn-contacto">Quero Ser Contactado</button>
+      <div class="botoes-cta">
+        <button type="button" class="btn-contacto" id="btn-contratar">Quero Contratar</button>
+        <button type="button" class="btn-saber-mais" id="btn-saber-mais">Quero Saber Mais</button>
+      </div>
+
+      <div class="painel-saber-mais" id="painel-saber-mais" hidden>
+        <p class="painel-titulo">Indique a forma de contacto preferencial</p>
+        <div class="opcoes-preferencia">
+          <label><input type="radio" name="preferencia" value="chamada" checked> Chamada/WhatsApp</label>
+          <label><input type="radio" name="preferencia" value="email"> Email</label>
+        </div>
+        <div class="campo">
+          <label for="pref-telefone">Telefone <span class="obrigatorio">*</span></label>
+          <input type="tel" id="pref-telefone" placeholder="Ex.: 923 000 000" autocomplete="tel">
+        </div>
+        <div class="campo" id="campo-pref-email" hidden>
+          <label for="pref-email">Email <span class="obrigatorio">*</span></label>
+          <input type="text" id="pref-email" placeholder="Ex.: nome@exemplo.com" inputmode="email" autocomplete="email">
+        </div>
+        <button type="button" class="btn-contacto" id="btn-contacto">Enviar Pedido</button>
+      </div>
+
       <div class="feedback" id="contacto-feedback" role="status"></div>
     </div>
   </section>
@@ -590,6 +641,8 @@
     <table class="modal-dados">
       <tr><td>Nome</td><td id="modal-nome"></td></tr>
       <tr><td>Telefone</td><td id="modal-telefone"></td></tr>
+      <tr><td>Contacto preferencial</td><td id="modal-preferencia"></td></tr>
+      <tr id="modal-linha-email" hidden><td>Email</td><td id="modal-email"></td></tr>
       <tr id="modal-linha-premio"><td id="modal-premio-rotulo">Prémio total a pagar</td><td id="modal-premio"></td></tr>
     </table>
     <div class="feedback" id="modal-feedback" role="status"></div>
@@ -785,11 +838,85 @@
     });
   });
 
-  /* --------- quero ser contactado (uCall / GoContact) --------- */
+  /* --------- contratação e pedido de contacto --------- */
+  var EMAIL_PROTOCOLOS = 'dep.protocolos@nossaseguros.ao';
+
   var btnContacto = document.getElementById('btn-contacto');
   var feedback    = document.getElementById('contacto-feedback');
   var inpTomador  = document.getElementById('tomador');
   var inpTelefone = document.getElementById('telefone');
+
+  var btnContratar  = document.getElementById('btn-contratar');
+  var btnSaberMais  = document.getElementById('btn-saber-mais');
+  var painelSaber   = document.getElementById('painel-saber-mais');
+  var prefTelefone  = document.getElementById('pref-telefone');
+  var prefEmail     = document.getElementById('pref-email');
+  var campoPrefEmail = document.getElementById('campo-pref-email');
+
+  function preferenciaEscolhida() {
+    var sel = document.querySelector('input[name="preferencia"]:checked');
+    return sel ? sel.value : 'chamada';
+  }
+
+  /* abre/fecha o subcampo do Quero Saber Mais */
+  btnSaberMais.addEventListener('click', function () {
+    painelSaber.hidden = !painelSaber.hidden;
+    if (!painelSaber.hidden && !prefTelefone.value) prefTelefone.value = inpTelefone.value;
+  });
+
+  /* mostrar o campo de email só quando a preferência é Email */
+  document.querySelectorAll('input[name="preferencia"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      campoPrefEmail.hidden = preferenciaEscolhida() !== 'email';
+    });
+  });
+
+  function emailValido(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
+
+  /* --------- Quero Contratar: email para o departamento de protocolos --------- */
+  btnContratar.addEventListener('click', function () {
+    var nome = inpTomador.value.trim();
+    var telefone = normalizarTelefone(inpTelefone.value);
+    var empregados = empregadosPreenchidos();
+    var opcoes = opcoesSimulacao();
+
+    var rotuloOriginal = btnContratar.textContent;
+    btnContratar.disabled = true;
+    btnContratar.textContent = 'A preparar…';
+
+    /* tenta gerar o link da cotação para incluir no email */
+    var pedidoLink = empregados.length
+      ? fetch('/api/cotacao-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(Object.assign({ nome: nome, telefone: inpTelefone.value, empregados: empregados }, opcoes))
+        }).then(function (r) { return r.json(); }).catch(function () { return null; })
+      : Promise.resolve(null);
+
+    pedidoLink.then(function (res) {
+      var linhas = [
+        'Boa tarde,', '',
+        'Gostaria de contratar o Seguro de Empregados Domésticos.', '',
+        'Nome: ' + (nome || '(por indicar)'),
+        'Telefone: ' + (telefone ? '(+244) ' + formatarTelefone(telefone) : '(por indicar)')
+      ];
+      if (empregados.length) {
+        linhas.push('N.º de empregados: ' + empregados.length);
+        linhas.push('Prémio total a pagar (' + ROTULO_FORMA[opcoes.formaPagamento] + '): ' + document.getElementById('p-apagar').textContent + ' Kz');
+        if (opcoes.inicio) linhas.push('Início pretendido: ' + opcoes.inicio.split('-').reverse().join('/'));
+        if (res && res.sucesso && res.url) linhas.push('', 'Cotação em PDF: ' + res.url);
+      }
+      linhas.push('', 'Pedido gerado pelo simulador do site.');
+
+      var mailto = 'mailto:' + EMAIL_PROTOCOLOS +
+        '?subject=' + encodeURIComponent('Pedido de Contratação - Seguro Empregados Domésticos') +
+        '&body=' + encodeURIComponent(linhas.join('\n'));
+      window.location.href = mailto;
+
+      btnContratar.disabled = false;
+      btnContratar.textContent = rotuloOriginal;
+    });
+  });
 
   function mostrarFeedback(tipo, msg) {
     feedback.className = 'feedback ' + tipo;
@@ -839,24 +966,26 @@
 
   btnContacto.addEventListener('click', function () {
     var nome     = inpTomador.value.trim();
-    var telefone = normalizarTelefone(inpTelefone.value);
+    var telefone = normalizarTelefone(prefTelefone.value);
+    var preferencia = preferenciaEscolhida();
+    var email = prefEmail.value.trim();
 
     inpTomador.classList.toggle('invalido', !nome);
-    inpTelefone.classList.toggle('invalido', !telefone);
+    prefTelefone.classList.toggle('invalido', !telefone);
+    prefEmail.classList.toggle('invalido', preferencia === 'email' && !emailValido(email));
 
-    if (!nome || !telefone) {
-      mostrarFeedback('erro', !nome && !telefone
-        ? 'Indique o seu nome e o telefone na secção Dados da Simulação.'
-        : (!nome ? 'Indique o seu nome na secção Dados da Simulação.'
-                 : 'Indique um telefone válido (9 dígitos, começado por 9).'));
-      return;
-    }
+    if (!nome) { mostrarFeedback('erro', 'Indique o seu nome na secção Dados da Simulação.'); return; }
+    if (!telefone) { mostrarFeedback('erro', 'Indique um telefone válido (9 dígitos, começado por 9).'); return; }
+    if (preferencia === 'email' && !emailValido(email)) { mostrarFeedback('erro', 'Indique um email válido.'); return; }
     feedback.className = 'feedback';
 
     /* prepara e abre o pop-up de confirmação */
     var empregados = empregadosPreenchidos();
     modalNome.textContent     = nome;
     modalTelefone.textContent = formatarTelefone(telefone);
+    document.getElementById('modal-preferencia').textContent = preferencia === 'email' ? 'Email' : 'Chamada/WhatsApp';
+    document.getElementById('modal-linha-email').hidden = preferencia !== 'email';
+    document.getElementById('modal-email').textContent = email;
     if (empregados.length) {
       modalLinhaPremio.style.display = '';
       document.getElementById('modal-premio-rotulo').textContent = 'Prémio total a pagar ' + document.getElementById('p-forma').textContent;
@@ -879,7 +1008,7 @@
 
   modalConfirmar.addEventListener('click', function () {
     var nome     = inpTomador.value.trim();
-    var telefone = normalizarTelefone(inpTelefone.value);
+    var telefone = normalizarTelefone(prefTelefone.value);
     if (!nome || !telefone) { fecharModal(); return; }
 
     aEnviar = true;
@@ -891,7 +1020,13 @@
     fetch(CONTACTO_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({ nome: nome, telefone: telefone, empregados: empregadosPreenchidos() }, opcoesSimulacao()))
+      body: JSON.stringify(Object.assign({
+        nome: nome,
+        telefone: telefone,
+        empregados: empregadosPreenchidos(),
+        preferencia: preferenciaEscolhida(),
+        email: prefEmail.value.trim()
+      }, opcoesSimulacao()))
     })
     .then(function (r) { return r.json().then(function (res) { return { ok: r.ok, res: res }; }); })
     .then(function (x) {
