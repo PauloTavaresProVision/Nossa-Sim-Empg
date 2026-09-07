@@ -641,7 +641,7 @@
     <table class="modal-dados">
       <tr><td>Nome</td><td id="modal-nome"></td></tr>
       <tr><td>Telefone</td><td id="modal-telefone"></td></tr>
-      <tr><td>Contacto preferencial</td><td id="modal-preferencia"></td></tr>
+      <tr id="modal-linha-preferencia"><td>Contacto preferencial</td><td id="modal-preferencia"></td></tr>
       <tr id="modal-linha-email" hidden><td>Email</td><td id="modal-email"></td></tr>
       <tr id="modal-linha-premio"><td id="modal-premio-rotulo">Prémio total a pagar</td><td id="modal-premio"></td></tr>
     </table>
@@ -839,8 +839,6 @@
   });
 
   /* --------- contratação e pedido de contacto --------- */
-  var EMAIL_PROTOCOLOS = 'dep.protocolos@nossaseguros.ao';
-
   var btnContacto = document.getElementById('btn-contacto');
   var feedback    = document.getElementById('contacto-feedback');
   var inpTomador  = document.getElementById('tomador');
@@ -873,49 +871,41 @@
 
   function emailValido(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
 
-  /* --------- Quero Contratar: email para o departamento de protocolos --------- */
+  /* --------- Quero Contratar: envio directo pelo servidor, com a cotação anexa ---------
+     O pedido é confirmado no pop-up e enviado por email (servidor) para
+     dep.protocolos@nossaseguros.ao. Requer nome, telefone e pelo menos um salário. */
+  var fluxoModal = 'contacto'; // 'contacto' (Quero Saber Mais) | 'contratar'
+
   btnContratar.addEventListener('click', function () {
     var nome = inpTomador.value.trim();
     var telefone = normalizarTelefone(inpTelefone.value);
     var empregados = empregadosPreenchidos();
-    var opcoes = opcoesSimulacao();
 
-    var rotuloOriginal = btnContratar.textContent;
-    btnContratar.disabled = true;
-    btnContratar.textContent = 'A preparar…';
+    inpTomador.classList.toggle('invalido', !nome);
+    inpTelefone.classList.toggle('invalido', !telefone);
 
-    /* tenta gerar o link da cotação para incluir no email */
-    var pedidoLink = empregados.length
-      ? fetch('/api/cotacao-link', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(Object.assign({ nome: nome, telefone: inpTelefone.value, empregados: empregados }, opcoes))
-        }).then(function (r) { return r.json(); }).catch(function () { return null; })
-      : Promise.resolve(null);
+    if (!nome) { mostrarFeedback('erro', 'Indique o seu nome na secção Dados da Simulação.'); return; }
+    if (!telefone) { mostrarFeedback('erro', 'Indique um telefone válido (9 dígitos, começado por 9) na secção Dados da Simulação.'); return; }
+    if (!empregados.length) { mostrarFeedback('erro', 'Indique pelo menos um salário para gerar a cotação.'); return; }
+    feedback.className = 'feedback';
 
-    pedidoLink.then(function (res) {
-      var linhas = [
-        'Boa tarde,', '',
-        'Gostaria de contratar o Seguro de Empregados Domésticos.', '',
-        'Nome: ' + (nome || '(por indicar)'),
-        'Telefone: ' + (telefone ? '(+244) ' + formatarTelefone(telefone) : '(por indicar)')
-      ];
-      if (empregados.length) {
-        linhas.push('N.º de empregados: ' + empregados.length);
-        linhas.push('Prémio total a pagar (' + ROTULO_FORMA[opcoes.formaPagamento] + '): ' + document.getElementById('p-apagar').textContent + ' Kz');
-        if (opcoes.inicio) linhas.push('Início pretendido: ' + opcoes.inicio.split('-').reverse().join('/'));
-        if (res && res.sucesso && res.url) linhas.push('', 'Cotação em PDF: ' + res.url);
-      }
-      linhas.push('', 'Pedido gerado pelo simulador do site.');
-
-      var mailto = 'mailto:' + EMAIL_PROTOCOLOS +
-        '?subject=' + encodeURIComponent('Pedido de Contratação - Seguro Empregados Domésticos') +
-        '&body=' + encodeURIComponent(linhas.join('\n'));
-      window.location.href = mailto;
-
-      btnContratar.disabled = false;
-      btnContratar.textContent = rotuloOriginal;
-    });
+    fluxoModal = 'contratar';
+    document.getElementById('modal-titulo').textContent = 'Confirmar Pedido de Contratação';
+    modalTexto.textContent = 'O pedido e a cotação em PDF serão enviados à NOSSA Seguros, que entrará em contacto consigo. Confirme os seus dados:';
+    modalNome.textContent = nome;
+    modalTelefone.textContent = formatarTelefone(telefone);
+    document.getElementById('modal-linha-preferencia').hidden = true;
+    document.getElementById('modal-linha-email').hidden = true;
+    modalLinhaPremio.style.display = '';
+    document.getElementById('modal-premio-rotulo').textContent = 'Prémio total a pagar ' + document.getElementById('p-forma').textContent;
+    modalPremio.textContent = document.getElementById('p-apagar').textContent + ' Kz';
+    modalTexto.style.display = '';
+    modalFeedback.className = 'feedback';
+    modalConfirmar.style.display = '';
+    modalConfirmar.disabled = false;
+    modalConfirmar.textContent = 'Confirmar';
+    modalCancelar.textContent = 'Cancelar';
+    modal.classList.add('aberto');
   });
 
   function mostrarFeedback(tipo, msg) {
@@ -980,9 +970,13 @@
     feedback.className = 'feedback';
 
     /* prepara e abre o pop-up de confirmação */
+    fluxoModal = 'contacto';
+    document.getElementById('modal-titulo').textContent = 'Confirmar Pedido de Contacto';
+    modalTexto.textContent = 'A equipa da NOSSA Seguros vai contactá-lo pela via indicada. Confirme os seus dados:';
     var empregados = empregadosPreenchidos();
     modalNome.textContent     = nome;
     modalTelefone.textContent = formatarTelefone(telefone);
+    document.getElementById('modal-linha-preferencia').hidden = false;
     document.getElementById('modal-preferencia').textContent = preferencia === 'email' ? 'Email' : 'Chamada/WhatsApp';
     document.getElementById('modal-linha-email').hidden = preferencia !== 'email';
     document.getElementById('modal-email').textContent = email;
@@ -1007,8 +1001,9 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') fecharModal(); });
 
   modalConfirmar.addEventListener('click', function () {
+    var contratar = fluxoModal === 'contratar';
     var nome     = inpTomador.value.trim();
-    var telefone = normalizarTelefone(prefTelefone.value);
+    var telefone = normalizarTelefone(contratar ? inpTelefone.value : prefTelefone.value);
     if (!nome || !telefone) { fecharModal(); return; }
 
     aEnviar = true;
@@ -1017,24 +1012,26 @@
     modalCancelar.disabled = true;
     modalFeedback.className = 'feedback';
 
-    fetch(CONTACTO_ENDPOINT, {
+    var corpo = { nome: nome, telefone: telefone, empregados: empregadosPreenchidos() };
+    if (!contratar) {
+      corpo.preferencia = preferenciaEscolhida();
+      corpo.email = prefEmail.value.trim();
+    }
+
+    fetch(contratar ? '/api/contratar' : CONTACTO_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({
-        nome: nome,
-        telefone: telefone,
-        empregados: empregadosPreenchidos(),
-        preferencia: preferenciaEscolhida(),
-        email: prefEmail.value.trim()
-      }, opcoesSimulacao()))
+      body: JSON.stringify(Object.assign(corpo, opcoesSimulacao()))
     })
     .then(function (r) { return r.json().then(function (res) { return { ok: r.ok, res: res }; }); })
     .then(function (x) {
       if (x.ok && x.res && x.res.sucesso) {
         modalTexto.style.display = 'none';
         modalFeedback.className = 'feedback ok';
-        modalFeedback.textContent = 'Pedido registado com sucesso. A equipa da NOSSA Seguros vai ligar-lhe brevemente para o ' + formatarTelefone(telefone) + '.';
-        if (x.res.cotacao_url) {
+        modalFeedback.textContent = contratar
+          ? 'Pedido de contratação enviado com sucesso, com a cotação em anexo. A NOSSA Seguros entrará em contacto consigo brevemente.'
+          : 'Pedido registado com sucesso. A equipa da NOSSA Seguros vai contactá-lo brevemente.';
+        if (!contratar && x.res.cotacao_url) {
           var ligacao = document.createElement('a');
           ligacao.href = x.res.cotacao_url;
           ligacao.target = '_blank';
@@ -1045,9 +1042,10 @@
         }
         modalConfirmar.style.display = 'none';
         modalCancelar.textContent = 'Fechar';
-        btnContacto.disabled = true;
-        btnContacto.textContent = 'Pedido Enviado';
-        mostrarFeedback('ok', 'Pedido registado com sucesso.');
+        var botao = contratar ? btnContratar : btnContacto;
+        botao.disabled = true;
+        botao.textContent = 'Pedido Enviado';
+        mostrarFeedback('ok', contratar ? 'Pedido de contratação enviado com sucesso.' : 'Pedido registado com sucesso.');
       } else {
         throw new Error((x.res && x.res.mensagem) || 'resposta inesperada');
       }
@@ -1056,7 +1054,7 @@
       modalFeedback.className = 'feedback erro';
       modalFeedback.textContent = (e && e.message && e.message !== 'resposta inesperada' && e.message.indexOf('fetch') === -1)
         ? e.message
-        : 'Não foi possível registar o pedido. Tente novamente ou ligue para o Contact Center: +244 923 190 860.';
+        : 'Não foi possível enviar o pedido. Tente novamente ou ligue para o Contact Center: +244 923 190 860.';
       modalConfirmar.disabled = false;
       modalConfirmar.textContent = 'Confirmar';
     })
