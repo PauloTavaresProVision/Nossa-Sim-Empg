@@ -1023,7 +1023,11 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign(corpo, opcoesSimulacao()))
     })
-    .then(function (r) { return r.json().then(function (res) { return { ok: r.ok, res: res }; }); })
+    .then(function (r) {
+      /* uma página HTML de erro do proxy não é JSON: cai na mensagem genérica */
+      return r.json().catch(function () { throw new Error('resposta inesperada'); })
+        .then(function (res) { return { ok: r.ok, res: res }; });
+    })
     .then(function (x) {
       if (x.ok && x.res && x.res.sucesso) {
         modalTexto.style.display = 'none';

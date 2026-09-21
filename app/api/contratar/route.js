@@ -109,6 +109,11 @@ export async function POST(request) {
       port: SMTP_PORT,
       secure: SMTP_PORT === 465,
       auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      /* sem timeouts, uma porta SMTP bloqueada deixava o pedido pendurado
+         até o reverse proxy devolver uma página HTML de erro ao browser */
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
 
     await transporte.sendMail({
