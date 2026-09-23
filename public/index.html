@@ -949,9 +949,46 @@
     return empregados;
   }
 
+  /* depois de um envio com sucesso, fechar o pop-up limpa o formulário */
+  var envioConcluido = false;
+
+  function limparFormulario() {
+    inpTomador.value = '';
+    inpTelefone.value = '';
+    prefTelefone.value = '';
+    prefEmail.value = '';
+    document.querySelector('input[name="preferencia"][value="chamada"]').checked = true;
+    campoPrefEmail.hidden = true;
+    painelSaber.hidden = true;
+
+    /* opções de volta aos valores por omissão */
+    selForma.value = 'anual';
+    selN.value = '13';
+    selTipo.value = 'mensal';
+    var hoje = new Date();
+    selInicio.value = hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0') + '-' + String(hoje.getDate()).padStart(2, '0');
+
+    /* lista de empregados volta a uma linha vazia */
+    lista.innerHTML = '';
+    contador = 0;
+    addEmpregado('');
+
+    /* botões prontos para uma nova simulação */
+    btnContacto.disabled = false;
+    btnContacto.textContent = 'Enviar Pedido';
+    btnContratar.disabled = false;
+    btnContratar.textContent = 'Quero Contratar';
+
+    calcular();
+  }
+
   function fecharModal() {
     if (aEnviar) return;
     modal.classList.remove('aberto');
+    if (envioConcluido) {
+      envioConcluido = false;
+      limparFormulario();
+    }
   }
 
   btnContacto.addEventListener('click', function () {
@@ -1050,6 +1087,7 @@
         botao.disabled = true;
         botao.textContent = 'Pedido Enviado';
         mostrarFeedback('ok', contratar ? 'Pedido de contratação enviado com sucesso.' : 'Pedido registado com sucesso.');
+        envioConcluido = true;
       } else {
         throw new Error((x.res && x.res.mensagem) || 'resposta inesperada');
       }
