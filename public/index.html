@@ -250,6 +250,20 @@
     padding-right: 1.25rem;
   }
   .tabela-premios .aoa { font-weight: 500; color: var(--texto-claro); font-size: .78rem; }
+  /* campanha: prémio sem desconto riscado e desconto a verde */
+  .tabela-premios td.valor-riscado,
+  .tabela-premios td.valor-riscado .aoa {
+    color: var(--texto-claro); font-weight: 500;
+    text-decoration: line-through;
+  }
+  .tabela-premios .linha-desconto td:last-child { color: var(--verde-escuro); }
+  .badge-desconto {
+    display: inline-block;
+    background: var(--verde); color: #fff;
+    font-size: .64rem; font-weight: 700; letter-spacing: .04em;
+    padding: .1rem .4rem; border-radius: 3px;
+    margin-left: .5rem; vertical-align: middle;
+  }
 
   .btn-primary {
     display: block; width: 100%;
@@ -545,11 +559,13 @@
     </table>
 
     <div class="premio-principal">
-      <div class="rotulo">Prémio Total a Pagar <span id="p-forma">(Anual)</span></div>
+      <div class="rotulo">Prémio Total a Pagar <span id="p-forma">(Anual)</span><span class="badge-desconto">-15%</span></div>
       <div class="valor"><span id="p-apagar">0,00</span> <small>Kz</small></div>
     </div>
 
     <table class="tabela-premios">
+      <tr><td>Prémio anual sem desconto</td><td class="valor-riscado"><span id="p-semdesconto">0,00</span> <span class="aoa">Kz</span></td></tr>
+      <tr class="linha-desconto"><td>Desconto de campanha (15%)</td><td><span id="p-desconto">-0,00</span> <span class="aoa">Kz</span></td></tr>
       <tr><td>Prémio anual</td><td><span id="p-anual">0,00</span> <span class="aoa">Kz</span></td></tr>
       <tr><td>Prémio semestral</td><td><span id="p-semestral">0,00</span> <span class="aoa">Kz</span></td></tr>
     </table>
@@ -769,9 +785,10 @@
       massaMensal += PARA_MENSAL[tipo](s);
     });
 
-    var massaAnual       = massaMensal * nSalarios;
-    var premioAnual      = massaAnual * TAXA_SIMPLES * FACTOR_COMERCIAL * (1 - DESCONTO);
-    var premioSemestral  = premioAnual / 2;
+    var massaAnual         = massaMensal * nSalarios;
+    var premioSemDesconto  = massaAnual * TAXA_SIMPLES * FACTOR_COMERCIAL;
+    var premioAnual        = premioSemDesconto * (1 - DESCONTO);
+    var premioSemestral    = premioAnual / 2;
     var premios = { anual: premioAnual, semestral: premioSemestral };
 
     document.getElementById('r-num').textContent    = String(Math.max(comSalario, inputs.length ? 1 : 0));
@@ -781,8 +798,10 @@
 
     document.getElementById('p-forma').textContent  = '(' + ROTULO_FORMA[selForma.value] + ')';
     document.getElementById('p-apagar').textContent = formatAOA(premios[selForma.value]);
-    document.getElementById('p-anual').textContent      = formatAOA(premioAnual);
-    document.getElementById('p-semestral').textContent  = formatAOA(premioSemestral);
+    document.getElementById('p-semdesconto').textContent = formatAOA(premioSemDesconto);
+    document.getElementById('p-desconto').textContent    = '-' + formatAOA(premioSemDesconto - premioAnual);
+    document.getElementById('p-anual').textContent       = formatAOA(premioAnual);
+    document.getElementById('p-semestral').textContent   = formatAOA(premioSemestral);
   }
 
   /* opções: recalculam e actualizam os rótulos dos salários */

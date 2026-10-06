@@ -9,7 +9,7 @@
  *   EMAIL_PROTOCOLOS (destino; por omissão dep.protocolos@nossaseguros.ao)
  */
 
-import { gerarPdfBytes, calcularPremios, normalizarEmpregados, normalizarOpcoes, FORMAS_PAGAMENTO } from '../../../lib/cotacao-pdf';
+import { gerarPdfBytes, calcularPremios, normalizarEmpregados, normalizarOpcoes, FORMAS_PAGAMENTO, DESCONTO } from '../../../lib/cotacao-pdf';
 import { enviarEmail, SMTP_CONFIGURADO } from '../../../lib/email';
 
 const EMAIL_PROTOCOLOS = process.env.EMAIL_PROTOCOLOS || 'dep.protocolos@nossaseguros.ao';
@@ -87,8 +87,14 @@ export async function POST(request) {
       'Forma de pagamento: ' + FORMAS_PAGAMENTO[opcoes.formaPagamento],
     ];
     if (opcoes.inicio) linhas.push('Início pretendido: ' + opcoes.inicio.split('-').reverse().join('/'));
+    linhas.push('Massa salarial anual: ' + formatAOA(calculo.massaAnual) + ' Kz');
+    if (DESCONTO > 0) {
+      linhas.push(
+        'Prémio Total Anual (sem desconto): ' + formatAOA(calculo.premioSemDesconto) + ' Kz',
+        'Desconto de campanha (' + (DESCONTO * 100) + '%): -' + formatAOA(calculo.valorDesconto) + ' Kz'
+      );
+    }
     linhas.push(
-      'Massa salarial anual: ' + formatAOA(calculo.massaAnual) + ' Kz',
       'Prémio Total Anual: ' + formatAOA(calculo.premioAnual) + ' Kz',
       'Prémio Total Semestral: ' + formatAOA(calculo.premioSemestral) + ' Kz',
       '',

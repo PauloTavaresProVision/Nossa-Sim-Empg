@@ -165,10 +165,12 @@ export async function POST(request) {
         ];
         if (empregados.length) {
           const calc = calcularPremios(empregados.map((e) => e.salario), opcoes);
+          const fmt = (v) => v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d),)/g, ' ');
           linhas.push(
             'N.º de empregados: ' + empregados.length,
             'Forma de pagamento: ' + FORMAS_PAGAMENTO[opcoes.formaPagamento],
-            'Prémio Total Anual simulado: ' + calc.premioAnual.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d),)/g, ' ') + ' Kz'
+            'Prémio Total Anual simulado: ' + fmt(calc.premioAnual) + ' Kz' +
+              ' (sem desconto: ' + fmt(calc.premioSemDesconto) + ' Kz)'
           );
         }
         if (cotacaoUrl) linhas.push('', 'Cotação em PDF: ' + cotacaoUrl);
