@@ -21,6 +21,7 @@ services:
       - SMTP_PASS=${SMTP_PASS}
       - SMTP_FROM=${SMTP_FROM}
       - EMAIL_PROTOCOLOS=${EMAIL_PROTOCOLOS}
+      - EMAIL_INFORMACOES=${EMAIL_INFORMACOES}
     volumes:
       # os PDFs das cotações sobrevivem a rebuilds do contentor
       - ./cotacoes:/app/cotacoes

@@ -9,22 +9,13 @@
  *   EMAIL_PROTOCOLOS (destino; por omissão dep.protocolos@nossaseguros.ao)
  */
 
-import nodemailer from 'nodemailer';
 import { gerarPdfBytes, calcularPremios, normalizarEmpregados, normalizarOpcoes, FORMAS_PAGAMENTO } from '../../../lib/cotacao-pdf';
+import { enviarEmail, SMTP_CONFIGURADO } from '../../../lib/email';
 
-const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
-const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
 const EMAIL_PROTOCOLOS = process.env.EMAIL_PROTOCOLOS || 'dep.protocolos@nossaseguros.ao';
 
 const MAX_PEDIDOS = 5;          // pedidos aceites por IP...
 const JANELA_MS   = 10 * 60e3;  // ...nesta janela (10 minutos)
-
-if (!SMTP_HOST) {
-  console.warn('[contratar] AVISO: SMTP_HOST não definido — o botão "Quero Contratar" vai responder 503 até o SMTP ser configurado (.env / docker-compose).');
-}
 
 const pedidosPorIp = new Map();
 
@@ -76,7 +67,7 @@ export async function POST(request) {
     return json({ sucesso: false, mensagem: 'Indique pelo menos um salário para gerar a cotação.' }, 422);
   }
 
-  if (!SMTP_HOST) {
+  if (!SMTP_CONFIGURADO) {
     return json({ sucesso: false, mensagem: 'Serviço temporariamente indisponível.' }, 503);
   }
 
@@ -104,20 +95,7 @@ export async function POST(request) {
       'A cotação segue em anexo.'
     );
 
-    const transporte = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
-      auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-      /* sem timeouts, uma porta SMTP bloqueada deixava o pedido pendurado
-         até o reverse proxy devolver uma página HTML de erro ao browser */
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 20000,
-    });
-
-    await transporte.sendMail({
-      from: SMTP_FROM,
+    await enviarEmail({
       to: EMAIL_PROTOCOLOS,
       subject: 'Pedido de Contratação - Seguro Empregados Domésticos - ' + nome,
       text: linhas.join('\n'),

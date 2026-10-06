@@ -11,6 +11,10 @@
  */
 
 import { gerarPdfCotacao, calcularPremios, normalizarEmpregados, normalizarOpcoes, FORMAS_PAGAMENTO } from '../../../lib/cotacao-pdf';
+import { enviarEmail, SMTP_CONFIGURADO } from '../../../lib/email';
+
+/* destino do email "Pedido de Informações" (preferência Email no Quero Saber Mais) */
+const EMAIL_INFORMACOES = process.env.EMAIL_INFORMACOES || process.env.EMAIL_PROTOCOLOS || 'dep.protocolos@nossaseguros.ao';
 
 const UCALL_API         = process.env.UCALL_API || 'https://apiservicesgocontact.ucall.co.ao/api/v1/GoContact/LoadContacts';
 const UCALL_APIKEY      = process.env.UCALL_APIKEY || '';
@@ -146,6 +150,43 @@ export async function POST(request) {
       console.log('[contactar] contacto criado no hopper: id ' + (resultado.data.contact_Id || '?') +
         ' | ' + (preferencia === 'email' ? 'prefere EMAIL' : 'prefere Chamada/WhatsApp') +
         (cotacaoUrl ? ' | cotacao ' + cotacaoUrl : ''));
+
+      /* preferência Email: além do registo no call center, segue um email
+         de pedido de informações (a falha do email não falha o pedido) */
+      if (preferencia === 'email' && SMTP_CONFIGURADO) {
+        const telFormatado = '(+244) ' + telefone.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
+        const linhas = [
+          'Pedido de informações recebido através do simulador do site.',
+          'O cliente prefere ser contactado por EMAIL.',
+          '',
+          'Nome: ' + nome,
+          'Email: ' + email,
+          'Telefone: ' + telFormatado,
+        ];
+        if (empregados.length) {
+          const calc = calcularPremios(empregados.map((e) => e.salario), opcoes);
+          linhas.push(
+            'N.º de empregados: ' + empregados.length,
+            'Forma de pagamento: ' + FORMAS_PAGAMENTO[opcoes.formaPagamento],
+            'Prémio Total Anual simulado: ' + calc.premioAnual.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d),)/g, ' ') + ' Kz'
+          );
+        }
+        if (cotacaoUrl) linhas.push('', 'Cotação em PDF: ' + cotacaoUrl);
+        linhas.push('', 'Registado também no call center (contacto n.º ' + (resultado.data.contact_Id || '?') + ').');
+
+        try {
+          await enviarEmail({
+            to: EMAIL_INFORMACOES,
+            replyTo: email,
+            subject: 'Pedido de Informações - Seguro de Empregados Domésticos - ' + nome,
+            text: linhas.join('\n'),
+          });
+          console.log('[contactar] email de pedido de informações enviado para ' + EMAIL_INFORMACOES);
+        } catch (erro) {
+          console.error('[contactar] contacto criado mas falhou o email de informações:', erro && erro.message ? erro.message : erro);
+        }
+      }
+
       return json({ sucesso: true, mensagem: 'Pedido registado com sucesso.', cotacao_url: cotacaoUrl }, 200);
     }
     console.error('[contactar] uCall respondeu mas não aceitou (HTTP ' + resposta.status + '):', JSON.stringify(resultado).slice(0, 400));
