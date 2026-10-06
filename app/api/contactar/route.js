@@ -142,6 +142,9 @@ export async function POST(request) {
 
     if (resultado && resultado.succeeded && resultado.data && resultado.data.success) {
       registarPedido(ip); // conta para o limite apenas quando aceite
+      console.log('[contactar] contacto criado no hopper: id ' + (resultado.data.contact_Id || '?') +
+        ' | ' + (preferencia === 'email' ? 'prefere EMAIL' : 'prefere Chamada/WhatsApp') +
+        (cotacaoUrl ? ' | cotacao ' + cotacaoUrl : ''));
       return json({ sucesso: true, mensagem: 'Pedido registado com sucesso.', cotacao_url: cotacaoUrl }, 200);
     }
     console.error('[contactar] uCall respondeu mas não aceitou (HTTP ' + resposta.status + '):', JSON.stringify(resultado).slice(0, 400));
