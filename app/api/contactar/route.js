@@ -135,6 +135,7 @@ export async function POST(request) {
         direct_To_Hopper: true,
         field7: field7,
         field11: cotacaoUrl || 'website',
+        field13: 'Interesse em Seguro Doméstico',
       }),
       signal: AbortSignal.timeout(15000),
     });
