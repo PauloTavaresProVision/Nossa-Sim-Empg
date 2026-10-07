@@ -1,42 +1,14 @@
 /**
- * GET /admin/relatorio — dashboard da campanha (requer sessão de backoffice).
- * Tema escuro NOSSA, gráficos Chart.js (evolução 30 dias, funil, pedidos por
- * tipo), KPIs, pedidos/cotações identificados e simulações recentes.
+ * GET /admin/relatorio — backoffice do simulador (requer sessão).
+ * Layout claro: KPIs, actividade por dia, origem dos acessos, dispositivos,
+ * simulações não concluídas e registo de actividade com pesquisa e filtros.
+ * Os dados são injectados agregados por dia; o período filtra no cliente.
  */
 
 import { sessaoValida } from '../../../lib/admin';
-import { lerEventos, agregarPorDia, listasRecentes, FMT_DIA_LUANDA } from '../../../lib/eventos';
+import { lerEventos, agregarPorDia, listaRegistos, FMT_DIA_LUANDA } from '../../../lib/eventos';
 
-function esc(v) {
-  return String(v == null ? '' : v)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function fmtKz(v) {
-  if (!Number.isFinite(Number(v))) return '-';
-  const partes = Number(v).toFixed(2).split('.');
-  return partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + partes[1] + ' Kz';
-}
-
-function fmtTel(t) {
-  return t ? '(+244) ' + String(t).replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3') : '-';
-}
-
-function fmtHora(iso) {
-  return new Date(iso).toLocaleString('pt-PT', { timeZone: 'Africa/Luanda', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-}
-
-function fmtDuracao(seg) {
-  if (!seg) return '—';
-  const m = Math.floor(seg / 60), s = seg % 60;
-  return m ? m + 'm ' + String(s).padStart(2, '0') + 's' : s + 's';
-}
-
-function pct(parte, todo) {
-  if (!todo) return '—';
-  return (100 * parte / todo).toFixed(1).replace('.', ',') + '%';
-}
+const USER = process.env.ADMIN_USER || 'admin';
 
 export async function GET(request) {
   if (!sessaoValida(request)) {
@@ -44,67 +16,23 @@ export async function GET(request) {
   }
 
   const eventos = await lerEventos();
-  const { totais, porDia, tempoMedioSegundos, numSessoes } = agregarPorDia(eventos);
-  const { pedidos, simulacoes } = listasRecentes(eventos);
-  const geradoEm = new Date().toLocaleString('pt-PT', { timeZone: 'Africa/Luanda' });
+  const { porDia } = agregarPorDia(eventos);
+  const registos = listaRegistos(eventos).map((e) => ({
+    t: e.t, id: e.id, tipo: e.tipo,
+    nome: e.nome || null, telefone: e.telefone || null, email: e.email || null,
+    preferencia: e.preferencia || null, premioAnual: e.premioAnual ?? null,
+    cotacaoUrl: e.cotacaoUrl || null, origem: e.origem || null,
+    massaMensal: e.massaMensal ?? null, empregados: e.empregados ?? null,
+  }));
 
-  /* série dos últimos 30 dias para o gráfico de evolução */
-  const mapaDias = new Map(porDia.map((d) => [d.dia, d]));
-  const serie = { rotulos: [], visitas: [], simulacoes: [], pedidos: [] };
-  const agora = new Date();
-  for (let i = 29; i >= 0; i--) {
-    const dia = FMT_DIA_LUANDA.format(new Date(agora.getTime() - i * 24 * 60 * 60e3));
-    const d = mapaDias.get(dia);
-    serie.rotulos.push(dia.slice(8, 10) + '/' + dia.slice(5, 7));
-    serie.visitas.push(d ? d.visita : 0);
-    serie.simulacoes.push(d ? d.simulacao : 0);
-    serie.pedidos.push(d ? d.esclarecimento + d.contratacao : 0);
-  }
-
-  const dadosGraficos = {
-    serie,
-    funil: [totais.visita, totais.simulacao, totais.pdf, totais.esclarecimento, totais.contratacao],
-    tipos: [totais.contratacao, totais.esclarecimentoChamada, totais.esclarecimentoEmail, totais.pdf],
+  const dados = {
+    porDia: [...porDia].reverse(), // ascendente
+    registos,
+    hoje: FMT_DIA_LUANDA.format(new Date()),
+    geradoEm: new Date().toLocaleString('pt-PT', { timeZone: 'Africa/Luanda' }),
+    iniciais: USER.slice(0, 2).toUpperCase(),
   };
-  const dadosJson = JSON.stringify(dadosGraficos).replace(/</g, '\\u003c');
-
-  const ETQ = {
-    contratacao: '<span class="etq etq-verde">Contratação</span>',
-    esclarecimento: '<span class="etq etq-azul">Esclarecimento</span>',
-    pdf: '<span class="etq etq-cinza">Cotação PDF</span>',
-  };
-
-  const linhasPedidos = pedidos.map((p) => `
-      <tr>
-        <td>${fmtHora(p.t)}</td>
-        <td>${ETQ[p.tipo] || ''}${p.tipo === 'esclarecimento' ? ' <span class="sub">' + (p.preferencia === 'email' ? 'Email' : 'Chamada/WhatsApp') + '</span>' : ''}</td>
-        <td class="forte">${esc(p.nome) || '<span class="sub">anónimo</span>'}</td>
-        <td>${fmtTel(p.telefone)}</td>
-        <td>${esc(p.email) || '-'}</td>
-        <td class="num forte">${p.premioAnual != null ? fmtKz(p.premioAnual) : '-'}</td>
-        <td>${p.cotacaoUrl ? '<a href="' + esc(p.cotacaoUrl) + '" target="_blank" rel="noopener">abrir</a>' : '-'}</td>
-      </tr>`).join('');
-
-  const rotuloTipoSal = { mensal: 'Mensal', anual: 'Anual', semanal: 'Semanal', diario: 'Diário' };
-  const linhasSimulacoes = simulacoes.map((s) => `
-      <tr>
-        <td>${fmtHora(s.t)}</td>
-        <td class="num">${s.empregados != null ? s.empregados : '-'}</td>
-        <td class="num">${s.massaMensal != null ? fmtKz(s.massaMensal) : '-'}</td>
-        <td class="num">${s.nSalarios != null ? String(s.nSalarios).replace('.', ',') : '-'}</td>
-        <td>${rotuloTipoSal[s.tipoSalario] || '-'}</td>
-        <td class="num forte">${s.premioAnual != null ? fmtKz(s.premioAnual) : '-'}</td>
-      </tr>`).join('');
-
-  const linhasDias = porDia.slice(0, 60).map((d) => `
-      <tr>
-        <td>${d.dia.split('-').reverse().join('/')}</td>
-        <td class="num">${d.visita}</td>
-        <td class="num">${d.simulacao}</td>
-        <td class="num">${d.pdf}</td>
-        <td class="num">${d.esclarecimento}</td>
-        <td class="num">${d.contratacao}</td>
-      </tr>`).join('');
+  const dadosJson = JSON.stringify(dados).replace(/</g, '\\u003c');
 
   const html = `<!DOCTYPE html>
 <html lang="pt-AO">
@@ -114,240 +42,446 @@ export async function GET(request) {
 <meta name="robots" content="noindex, nofollow">
 <title>Backoffice | Simulador NOSSA Seguros</title>
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --verde: #7FBE3D; --verde-claro: #A5D468;
-    --azul: #4F79D0; --azul-claro: #86A9E8;
-    --fundo: #081426; --painel: #0E1F3C; --painel-borda: #1C3156;
-    --texto: #E8EEF9; --suave: #8FA2C6; --apagado: #5B6E93;
+    --navy: #0A1D3F; --navy-2: #13306B; --azul: #4F79D0; --verde: #7FBE3D;
+    --texto: #15233F; --suave: #5E6B85; --apagado: #93A0B8;
+    --borda: #E4E8F0; --fundo: #FFFFFF; --cinza: #F4F6FA;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
-    background: radial-gradient(1200px 500px at 80% -10%, #12294E 0%, var(--fundo) 55%);
-    color: var(--texto); font-size: 16px; line-height: 1.5; min-height: 100vh;
+    font-family: "Nunito Sans", ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
+    background: var(--fundo); color: var(--texto); font-size: 15px; line-height: 1.45;
   }
-  header { border-bottom: 1px solid var(--painel-borda); background: rgba(8,20,38,.6); }
+  header { border-bottom: 1px solid var(--borda); }
   .topo {
-    max-width: 1240px; margin: 0 auto; padding: .75rem 1.25rem;
+    max-width: 1340px; margin: 0 auto; padding: .7rem 1.4rem;
     display: flex; align-items: center; gap: 1rem;
   }
-  .chip-logo { background: #fff; border-radius: 8px; padding: .35rem .6rem; line-height: 0; }
-  .chip-logo img { height: 30px; }
-  .topo .titulos { flex: 1; min-width: 0; }
-  .topo h1 { font-size: .95rem; font-weight: 800; letter-spacing: .01em; }
-  .topo .sub-titulo { font-size: .7rem; color: var(--suave); }
-  a.sair {
-    font-size: .72rem; font-weight: 700; color: var(--suave); text-decoration: none;
-    border: 1px solid var(--painel-borda); border-radius: 6px; padding: .4rem .85rem;
-    white-space: nowrap;
+  .topo img { height: 30px; }
+  .topo .separador { width: 1px; height: 1.5rem; background: var(--borda); }
+  .topo .seccao-nome { font-size: .92rem; font-weight: 700; color: var(--texto); }
+  .topo .direita { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
+  .ao-vivo { font-size: .76rem; font-weight: 700; color: var(--suave); display: inline-flex; align-items: center; gap: .4rem; }
+  .ao-vivo::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--verde); }
+  .avatar {
+    width: 2.1rem; height: 2.1rem; border-radius: 50%;
+    background: var(--cinza); border: 1px solid var(--borda);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: .72rem; font-weight: 800; color: var(--navy);
+    text-decoration: none;
   }
-  a.sair:hover { color: #fff; border-color: var(--suave); }
-  main { max-width: 1240px; margin: 0 auto; padding: 1.4rem 1.25rem 3rem; }
-  .gerado { font-size: .72rem; color: var(--apagado); margin-bottom: 1rem; }
+  .avatar:hover { background: #E9EDF5; }
 
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: .8rem; }
-  .kpi {
-    background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015));
-    border: 1px solid var(--painel-borda); border-radius: 12px;
-    padding: .95rem 1.1rem; position: relative; overflow: hidden;
+  main { max-width: 1340px; margin: 0 auto; padding: 1.4rem 1.4rem 3rem; }
+  .cabeca { display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .cabeca h1 { font-size: 1.9rem; font-weight: 900; color: var(--navy); letter-spacing: -.01em; }
+  .cabeca p { color: var(--suave); font-size: .95rem; }
+  .cabeca .controles { margin-left: auto; display: flex; gap: .6rem; align-items: center; }
+  select.periodo, a.exportar {
+    height: 2.7rem; border: 1px solid var(--borda); border-radius: 8px;
+    background: #fff; color: var(--texto);
+    font-family: inherit; font-size: .86rem; font-weight: 700;
+    padding: 0 .9rem; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; gap: .5rem;
   }
-  .kpi::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-    background: var(--verde);
-  }
-  .kpi .rotulo { font-size: .64rem; font-weight: 700; color: var(--suave); text-transform: uppercase; letter-spacing: .1em; }
-  .kpi .numero { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.25; }
-  .kpi .delta { font-size: .7rem; color: var(--verde-claro); font-weight: 600; }
-  .kpi .delta.neutro { color: var(--suave); font-weight: 400; }
-  .kpi.destaque { background: linear-gradient(135deg, rgba(127,190,61,.16), rgba(127,190,61,.05)); border-color: rgba(127,190,61,.4); }
-  .kpi.destaque .numero { color: var(--verde-claro); }
+  select.periodo:focus { outline: none; border-color: var(--azul); }
+  a.exportar:hover, select.periodo:hover { border-color: var(--apagado); }
 
-  h2 {
-    font-size: .74rem; font-weight: 800; color: var(--texto);
-    text-transform: uppercase; letter-spacing: .12em;
-    display: flex; align-items: center; gap: .55rem;
-    margin: 1.7rem 0 .8rem;
+  .kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    margin: 0 0 1rem;
   }
-  h2::before { content: ""; width: 1.4rem; height: 3px; background: var(--verde); border-radius: 2px; }
+  .kpi { padding: .7rem 1.2rem .9rem 0; }
+  .kpi + .kpi { border-left: 1px solid var(--borda); padding-left: 1.2rem; }
+  @media (max-width: 760px) { .kpi + .kpi { border-left: none; padding-left: 0; } }
+  .kpi .rotulo { font-size: .86rem; font-weight: 700; color: var(--texto); }
+  .kpi .numero { font-size: 2.3rem; font-weight: 900; color: var(--navy); font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .kpi .sub { font-size: .74rem; color: var(--apagado); }
 
-  .grelha-graficos { display: grid; grid-template-columns: 1.7fr 1fr; gap: .9rem; }
-  @media (max-width: 900px) { .grelha-graficos { grid-template-columns: 1fr; } }
-  .painel {
-    background: var(--painel);
-    border: 1px solid var(--painel-borda); border-radius: 12px;
-    padding: 1rem 1.1rem;
+  .grelha {
+    display: grid; grid-template-columns: 1.9fr .9fr .9fr; gap: 0;
+    border: 1px solid var(--borda); border-radius: 12px; overflow: hidden;
+    margin-bottom: 1.6rem;
   }
-  .painel h3 { font-size: .72rem; font-weight: 700; color: var(--suave); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .7rem; }
-  .grafico-alto { height: 300px; position: relative; }
-  .grafico-medio { height: 136px; position: relative; }
-  .coluna { display: flex; flex-direction: column; gap: .9rem; }
+  @media (max-width: 1020px) { .grelha { grid-template-columns: 1fr; } }
+  .celula { padding: 1.1rem 1.3rem; }
+  .celula + .celula { border-left: 1px solid var(--borda); }
+  @media (max-width: 1020px) { .celula + .celula { border-left: none; border-top: 1px solid var(--borda); } }
+  .celula h2 { font-size: 1.05rem; font-weight: 800; color: var(--navy); margin-bottom: .8rem; }
+  .grafico-caixa { height: 250px; position: relative; }
 
-  .tabela-scroll { overflow-x: auto; background: var(--painel); border: 1px solid var(--painel-borda); border-radius: 12px; }
+  .barra-linha { display: grid; grid-template-columns: 6.2rem 1fr 2.8rem; align-items: center; gap: .6rem; margin-bottom: .65rem; font-size: .84rem; color: var(--texto); }
+  .barra-fundo { background: var(--cinza); border-radius: 99px; height: .6rem; overflow: hidden; }
+  .barra-valor { height: 100%; border-radius: 99px; }
+  .barra-linha .pct { text-align: right; font-weight: 700; color: var(--suave); font-size: .8rem; }
+
+  .mini-titulo { font-size: 1.05rem; font-weight: 800; color: var(--navy); margin: 1.1rem 0 .3rem; }
+  .numero-grande { font-size: 2rem; font-weight: 900; color: var(--navy); line-height: 1.2; }
+  .sub-claro { font-size: .78rem; color: var(--apagado); }
+
+  .registos-cabeca { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .8rem; }
+  .registos-cabeca .titulos { margin-right: auto; }
+  .registos-cabeca h2 { font-size: 1.35rem; font-weight: 900; color: var(--navy); }
+  .registos-cabeca p { font-size: .82rem; color: var(--suave); }
+  .pesquisa {
+    height: 2.6rem; border: 1px solid var(--borda); border-radius: 8px;
+    padding: 0 .9rem 0 2.1rem; font-family: inherit; font-size: .85rem; min-width: 15rem;
+    background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%235E6B85" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/></svg>') .7rem center no-repeat;
+  }
+  .pesquisa:focus { outline: none; border-color: var(--azul); }
+  select.filtro {
+    height: 2.6rem; border: 1px solid var(--borda); border-radius: 8px;
+    background: #fff; font-family: inherit; font-size: .83rem; font-weight: 700;
+    color: var(--texto); padding: 0 .7rem; cursor: pointer;
+  }
+  button.limpar {
+    height: 2.6rem; border: 1px solid var(--borda); border-radius: 8px; background: #fff;
+    font-family: inherit; font-size: .83rem; font-weight: 700; color: var(--texto);
+    padding: 0 .9rem; cursor: pointer;
+  }
+  button.limpar:hover { border-color: var(--apagado); }
+
+  .tabela-caixa { border: 1px solid var(--borda); border-radius: 12px; overflow: hidden; }
+  .tabela-scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { padding: .55rem .85rem; font-size: .78rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,.05); white-space: nowrap; color: var(--suave); }
-  td.forte { color: var(--texto); font-weight: 600; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  th { font-size: .62rem; text-transform: uppercase; letter-spacing: .09em; color: var(--apagado); background: rgba(255,255,255,.025); }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: rgba(255,255,255,.025); }
-  td a { color: var(--verde-claro); font-weight: 700; text-decoration: none; }
+  th, td { padding: .68rem 1rem; font-size: .84rem; text-align: left; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  th { font-size: .74rem; color: var(--suave); font-weight: 800; background: #FAFBFD; }
+  td .nome { font-weight: 800; color: var(--navy); }
+  td .linha2 { font-size: .74rem; color: var(--apagado); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  td a { color: var(--azul); font-weight: 800; text-decoration: none; }
   td a:hover { text-decoration: underline; }
   .etq {
-    display: inline-block; font-size: .6rem; font-weight: 800;
-    text-transform: uppercase; letter-spacing: .06em;
-    padding: .16rem .5rem; border-radius: 99px;
+    display: inline-block; font-size: .74rem; font-weight: 800;
+    padding: .22rem .65rem; border-radius: 7px;
   }
-  .etq-verde { background: rgba(127,190,61,.18); color: var(--verde-claro); border: 1px solid rgba(127,190,61,.45); }
-  .etq-azul { background: rgba(79,121,208,.16); color: var(--azul-claro); border: 1px solid rgba(79,121,208,.45); }
-  .etq-cinza { background: rgba(143,162,198,.12); color: var(--suave); border: 1px solid rgba(143,162,198,.35); }
-  .sub { font-size: .68rem; color: var(--apagado); }
-  .vazio { font-size: .8rem; color: var(--apagado); padding: 1rem 1.1rem; }
-  .accoes { margin-top: 1.2rem; }
-  .botao {
-    display: inline-block; background: var(--verde); color: #06101F; text-decoration: none;
-    font-size: .74rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
-    padding: .65rem 1.2rem; border-radius: 6px;
+  .etq-visita { background: var(--cinza); color: var(--suave); }
+  .etq-sim { background: #E3ECFB; color: #2B55A6; }
+  .etq-cot { background: #E9F5DA; color: #4C7A1B; }
+  .etq-ped { background: #FFF3D6; color: #8A6410; }
+  .etq-con { background: var(--verde); color: #fff; }
+  .rodape-tabela {
+    display: flex; align-items: center; gap: 1rem; padding: .7rem 1rem;
+    font-size: .8rem; color: var(--suave);
   }
-  .botao:hover { background: var(--verde-claro); }
+  .paginacao { margin-left: auto; display: flex; gap: .3rem; }
+  .paginacao button {
+    min-width: 2rem; height: 2rem; border: 1px solid var(--borda); border-radius: 7px;
+    background: #fff; font-family: inherit; font-weight: 800; font-size: .8rem;
+    color: var(--texto); cursor: pointer;
+  }
+  .paginacao button.activa { border-color: var(--verde); background: #F3FAEB; color: #4C7A1B; }
+  .paginacao button:disabled { opacity: .4; cursor: default; }
+  .vazio { padding: 1.4rem 1rem; font-size: .86rem; color: var(--apagado); text-align: center; }
 </style>
 </head>
 <body>
 <header>
   <div class="topo">
-    <span class="chip-logo"><img src="/logo-nossa.png" alt="NOSSA Seguros"></span>
-    <div class="titulos">
-      <h1>Campanha Empregados Domésticos</h1>
-      <div class="sub-titulo">Backoffice do simulador · actualizado ${geradoEm} (Luanda)</div>
+    <img src="/logo-nossa.png" alt="NOSSA Seguros">
+    <span class="separador"></span>
+    <span class="seccao-nome">Simulador · Backoffice</span>
+    <div class="direita">
+      <span class="ao-vivo">Dados em directo</span>
+      <a class="avatar" href="/api/admin/sair" title="Terminar sessão">${dados.iniciais}</a>
     </div>
-    <a class="sair" href="/api/admin/sair">Terminar sessão</a>
   </div>
 </header>
 <main>
-  <div class="kpis">
-    <div class="kpi"><div class="rotulo">Visitas</div><div class="numero">${totais.visita}</div><div class="delta neutro">sessões únicas</div></div>
-    <div class="kpi"><div class="rotulo">Tempo médio</div><div class="numero">${fmtDuracao(tempoMedioSegundos)}</div><div class="delta neutro">${numSessoes} sessões medidas</div></div>
-    <div class="kpi"><div class="rotulo">Simularam</div><div class="numero">${totais.simulacao}</div><div class="delta">${pct(totais.simulacao, totais.visita)} das visitas</div></div>
-    <div class="kpi"><div class="rotulo">Cotações PDF</div><div class="numero">${totais.pdf}</div><div class="delta neutro">descarregadas</div></div>
-    <div class="kpi"><div class="rotulo">Esclarecimento</div><div class="numero">${totais.esclarecimento}</div><div class="delta neutro">${totais.esclarecimentoChamada} chamada · ${totais.esclarecimentoEmail} email</div></div>
-    <div class="kpi destaque"><div class="rotulo">Contratações</div><div class="numero">${totais.contratacao}</div><div class="delta">${pct(totais.contratacao, totais.simulacao)} de quem simulou</div></div>
-  </div>
-
-  <h2>Actividade</h2>
-  <div class="grelha-graficos">
-    <div class="painel">
-      <h3>Evolução · últimos 30 dias</h3>
-      <div class="grafico-alto"><canvas id="g-evolucao"></canvas></div>
+  <div class="cabeca">
+    <div>
+      <h1>Visitas, simulações e cotações</h1>
+      <p>Toda a actividade do simulador num único ecrã.</p>
     </div>
-    <div class="coluna">
-      <div class="painel">
-        <h3>Funil da campanha</h3>
-        <div class="grafico-medio"><canvas id="g-funil"></canvas></div>
-      </div>
-      <div class="painel">
-        <h3>Pedidos por tipo</h3>
-        <div class="grafico-medio"><canvas id="g-tipos"></canvas></div>
-      </div>
+    <div class="controles">
+      <select class="periodo" id="periodo">
+        <option value="7">Últimos 7 dias</option>
+        <option value="30" selected>Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="0">Desde o início</option>
+      </select>
+      <a class="exportar" href="/admin/relatorio-csv">&#8681; Exportar</a>
     </div>
   </div>
 
-  <h2>Pedidos e cotações identificados</h2>
-  <div class="tabela-scroll">
-    ${pedidos.length ? `<table>
-      <tr><th>Quando</th><th>Tipo</th><th>Nome</th><th>Telefone</th><th>Email</th><th class="num">Prémio anual</th><th>Cotação</th></tr>
-      ${linhasPedidos}
-    </table>` : '<p class="vazio">Ainda sem pedidos ou cotações identificados.</p>'}
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grelha">
+    <div class="celula">
+      <h2>Actividade por dia</h2>
+      <div class="grafico-caixa"><canvas id="g-actividade"></canvas></div>
+    </div>
+    <div class="celula">
+      <h2>Origem dos acessos</h2>
+      <div id="origens"></div>
+      <div class="mini-titulo">Contactos pedidos</div>
+      <div id="contactos-split" class="sub-claro"></div>
+    </div>
+    <div class="celula">
+      <h2>Dispositivos</h2>
+      <div id="dispositivos"></div>
+      <div class="mini-titulo">Simulações não concluídas</div>
+      <div class="numero-grande" id="nao-concluidas">0</div>
+      <div class="sub-claro" id="nao-concluidas-sub"></div>
+      <div class="mini-titulo">Tempo médio no site</div>
+      <div class="numero-grande" id="tempo-medio">—</div>
+      <div class="sub-claro" id="tempo-medio-sub"></div>
+    </div>
   </div>
 
-  <h2>Simulações recentes</h2>
-  <div class="tabela-scroll">
-    ${simulacoes.length ? `<table>
-      <tr><th>Quando</th><th class="num">Empregados</th><th class="num">Massa mensal</th><th class="num">N.º salários</th><th>Tipo salário</th><th class="num">Prémio anual</th></tr>
-      ${linhasSimulacoes}
-    </table>` : '<p class="vazio">Ainda sem simulações registadas.</p>'}
+  <div class="registos-cabeca">
+    <div class="titulos">
+      <h2>Registos de actividade</h2>
+      <p>Visitas, simulações, cotações e pedidos de contacto.</p>
+    </div>
+    <input class="pesquisa" id="pesquisa" type="text" placeholder="Pesquisar nome, telefone ou email">
+    <select class="filtro" id="filtro-tipo">
+      <option value="">Tipo: todas as actividades</option>
+      <option value="contratacao">Contratação</option>
+      <option value="esclarecimento">Esclarecimento</option>
+      <option value="pdf">Cotação PDF</option>
+      <option value="simulacao">Simulação</option>
+      <option value="visita">Visita</option>
+    </select>
+    <button class="limpar" id="limpar">Limpar filtros</button>
   </div>
-
-  <h2>Quebra diária</h2>
-  <div class="tabela-scroll">
-    ${porDia.length ? `<table>
-      <tr><th>Dia</th><th class="num">Visitas</th><th class="num">Simularam</th><th class="num">PDF</th><th class="num">Esclarecimento</th><th class="num">Contratação</th></tr>
-      ${linhasDias}
-    </table>` : '<p class="vazio">Ainda não há eventos registados.</p>'}
-  </div>
-
-  <div class="accoes">
-    <a class="botao" href="/admin/relatorio-csv">Exportar CSV</a>
+  <div class="tabela-caixa">
+    <div class="tabela-scroll">
+      <table id="tabela">
+        <thead>
+          <tr><th>Data / Hora</th><th>Visitante</th><th>Actividade</th><th>Contacto</th><th>Ref.</th><th class="num" style="text-align:right">Prémio anual</th><th>Cotação</th></tr>
+        </thead>
+        <tbody id="corpo-tabela"></tbody>
+      </table>
+    </div>
+    <div class="rodape-tabela">
+      <span id="contagem"></span>
+      <div class="paginacao" id="paginacao"></div>
+    </div>
   </div>
 </main>
 <script>
+var D = ${dadosJson};
 (function () {
-  if (typeof Chart === 'undefined') return; // sem internet para o CDN, o resto do dashboard funciona
-  var D = ${dadosJson};
-  var SUAVE = '#8FA2C6', GRELHA = 'rgba(255,255,255,.055)';
-  Chart.defaults.color = SUAVE;
-  Chart.defaults.font.family = 'ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif';
-  Chart.defaults.font.size = 11;
+  var fmtKz = function (v) {
+    if (v == null || !isFinite(Number(v))) return '-';
+    var p = Number(v).toFixed(2).split('.');
+    return p[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g, ' ') + ',' + p[1] + ' Kz';
+  };
+  var fmtInt = function (n) { return String(n).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ' '); };
+  var fmtPct = function (parte, todo) { return todo ? (100 * parte / todo).toFixed(1).replace('.', ',') + '%' : '—'; };
+  var fmtTel = function (t) { return t ? '(+244) ' + String(t).replace(/(\\d{3})(\\d{3})(\\d{3})/, '$1 $2 $3') : ''; };
+  var fmtDur = function (seg) {
+    if (!seg) return '—';
+    var m = Math.floor(seg / 60), s = Math.round(seg % 60);
+    return m ? m + 'm ' + (s < 10 ? '0' : '') + s + 's' : s + 's';
+  };
+  var esc = function (v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  var fmtHora = function (iso) {
+    var d = new Date(iso);
+    return d.toLocaleString('pt-PT', { timeZone: 'Africa/Luanda', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).replace('.,', ' ·').replace(',', ' ·');
+  };
 
-  /* evolução: área suave com gradientes */
-  var ctx = document.getElementById('g-evolucao').getContext('2d');
-  var gradVerde = ctx.createLinearGradient(0, 0, 0, 300);
-  gradVerde.addColorStop(0, 'rgba(127,190,61,.34)');
-  gradVerde.addColorStop(1, 'rgba(127,190,61,0)');
-  var gradAzul = ctx.createLinearGradient(0, 0, 0, 300);
-  gradAzul.addColorStop(0, 'rgba(79,121,208,.3)');
-  gradAzul.addColorStop(1, 'rgba(79,121,208,0)');
+  /* ---------- período ---------- */
+  function diasDoPeriodo(n) {
+    if (!n) return D.porDia.slice();
+    var corte = new Date(Date.now() - (n - 1) * 86400e3).toISOString().slice(0, 10);
+    return D.porDia.filter(function (d) { return d.dia >= corte; });
+  }
+  function dataCorte(n) {
+    return n ? new Date(Date.now() - (n - 1) * 86400e3).toISOString().slice(0, 10) : null;
+  }
+  function soma(dias, chave) {
+    return dias.reduce(function (acc, d) { return acc + (d[chave] || 0); }, 0);
+  }
 
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: D.serie.rotulos,
-      datasets: [
-        { label: 'Visitas', data: D.serie.visitas, borderColor: '#4F79D0', backgroundColor: gradAzul, fill: true, tension: .4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
-        { label: 'Simulações', data: D.serie.simulacoes, borderColor: '#7FBE3D', backgroundColor: gradVerde, fill: true, tension: .4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
-        { label: 'Pedidos', data: D.serie.pedidos, borderColor: '#E8EEF9', borderDash: [4, 4], fill: false, tension: .4, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'circle' } } },
-      scales: {
-        x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } },
-        y: { beginAtZero: true, grid: { color: GRELHA }, ticks: { precision: 0 } }
+  /* ---------- KPIs ---------- */
+  function renderKpis(dias) {
+    var visitas = soma(dias, 'visita'), sims = soma(dias, 'simulacao'), cots = soma(dias, 'pdf');
+    var peds = soma(dias, 'esclarecimento'), cons = soma(dias, 'contratacao');
+    var kpis = [
+      { r: 'Visitas', n: fmtInt(visitas), s: 'sessões no período' },
+      { r: 'Simulações concluídas', n: fmtInt(sims), s: fmtPct(sims, visitas) + ' das visitas' },
+      { r: 'Cotações em PDF', n: fmtInt(cots), s: fmtPct(cots, sims) + ' das simulações' },
+      { r: 'Pedidos de contacto', n: fmtInt(peds + cons), s: fmtInt(peds) + ' esclarecimento · ' + fmtInt(cons) + ' contratação' },
+      { r: 'Conversão em contratação', n: fmtPct(cons, sims), s: 'de quem simulou' }
+    ];
+    document.getElementById('kpis').innerHTML = kpis.map(function (k) {
+      return '<div class="kpi"><div class="rotulo">' + k.r + '</div><div class="numero">' + k.n + '</div><div class="sub">' + k.s + '</div></div>';
+    }).join('');
+  }
+
+  /* ---------- gráfico ---------- */
+  var grafico = null;
+  function renderGrafico(dias) {
+    var ctx = document.getElementById('g-actividade');
+    if (typeof Chart === 'undefined' || !ctx) return;
+    var rotulos = dias.map(function (d) { return d.dia.slice(8, 10) + '/' + d.dia.slice(5, 7); });
+    var conf = {
+      type: 'bar',
+      data: {
+        labels: rotulos,
+        datasets: [
+          { label: 'Visitas', data: dias.map(function (d) { return d.visita; }), backgroundColor: '#0A1D3F', borderRadius: 3, maxBarThickness: 26 },
+          { label: 'Simulações', data: dias.map(function (d) { return d.simulacao; }), backgroundColor: '#4F79D0', borderRadius: 3, maxBarThickness: 26 },
+          { label: 'Cotações', data: dias.map(function (d) { return d.pdf; }), backgroundColor: '#7FBE3D', borderRadius: 3, maxBarThickness: 26 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 11, boxHeight: 11, font: { weight: 700 } } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 14, font: { size: 10.5 } } },
+          y: { beginAtZero: true, grid: { color: '#EDF0F6' }, ticks: { precision: 0, font: { size: 10.5 } }, title: { display: true, text: 'Quantidade', font: { size: 10.5 } } }
+        }
       }
-    }
-  });
+    };
+    if (grafico) { grafico.data = conf.data; grafico.update(); }
+    else { grafico = new Chart(ctx, conf); }
+  }
 
-  /* funil horizontal */
-  new Chart(document.getElementById('g-funil'), {
-    type: 'bar',
-    data: {
-      labels: ['Visitas', 'Simularam', 'PDF', 'Esclarecim.', 'Contratação'],
-      datasets: [{ data: D.funil, backgroundColor: ['#2E4F8F', '#4F79D0', '#5E99B8', '#6BB05B', '#7FBE3D'], borderRadius: 4, barThickness: 13 }]
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { beginAtZero: true, grid: { color: GRELHA }, ticks: { precision: 0 } },
-        y: { grid: { display: false } }
+  /* ---------- barras de percentagem ---------- */
+  function renderBarras(el, linhas, cor) {
+    var total = linhas.reduce(function (a, l) { return a + l.valor; }, 0);
+    el.innerHTML = linhas.map(function (l, i) {
+      var pctN = total ? Math.round(100 * l.valor / total) : 0;
+      var c = Array.isArray(cor) ? cor[i % cor.length] : cor;
+      return '<div class="barra-linha"><span>' + l.rotulo + '</span>' +
+        '<div class="barra-fundo"><div class="barra-valor" style="width:' + pctN + '%;background:' + c + '"></div></div>' +
+        '<span class="pct">' + (total ? pctN + '%' : '—') + '</span></div>';
+    }).join('') || '<p class="sub-claro">Sem dados no período.</p>';
+  }
+
+  function renderPaineis(dias) {
+    renderBarras(document.getElementById('origens'), [
+      { rotulo: 'Google', valor: soma(dias, 'google') },
+      { rotulo: 'Directo', valor: soma(dias, 'direto') },
+      { rotulo: 'Redes sociais', valor: soma(dias, 'social') },
+      { rotulo: 'Outros', valor: soma(dias, 'outros') }
+    ], ['#0A1D3F', '#4F79D0', '#7FBE3D', '#B9C4D8']);
+
+    renderBarras(document.getElementById('dispositivos'), [
+      { rotulo: 'Telemóvel', valor: soma(dias, 'movel') },
+      { rotulo: 'Computador', valor: soma(dias, 'computador') }
+    ], ['#7FBE3D', '#0A1D3F']);
+
+    var iniciadas = soma(dias, 'sInicio'), concluidas = soma(dias, 'simulacao');
+    var nao = Math.max(0, iniciadas - concluidas);
+    document.getElementById('nao-concluidas').textContent = fmtInt(nao);
+    document.getElementById('nao-concluidas-sub').textContent = fmtInt(iniciadas) + ' iniciadas · ' + fmtInt(concluidas) + ' concluídas';
+
+    var sSoma = soma(dias, 'sessaoSoma'), sNum = soma(dias, 'sessaoNum');
+    document.getElementById('tempo-medio').textContent = sNum ? fmtDur(sSoma / sNum) : '—';
+    document.getElementById('tempo-medio-sub').textContent = fmtInt(sNum) + ' sessões medidas';
+
+    var eCh = soma(dias, 'eChamada'), eEm = soma(dias, 'eEmail');
+    document.getElementById('contactos-split').textContent = fmtInt(eCh) + ' por chamada/WhatsApp · ' + fmtInt(eEm) + ' por email';
+  }
+
+  /* ---------- registos ---------- */
+  var ETQ = {
+    visita: ['etq-visita', 'Visita'],
+    simulacao: ['etq-sim', 'Simulação'],
+    pdf: ['etq-cot', 'Cotação PDF'],
+    esclarecimento: ['etq-ped', 'Esclarecimento'],
+    contratacao: ['etq-con', 'Contratação']
+  };
+  var pagina = 1;
+  var POR_PAGINA = 10;
+
+  function registosFiltrados() {
+    var corte = dataCorte(Number(document.getElementById('periodo').value));
+    var tipo = document.getElementById('filtro-tipo').value;
+    var termo = document.getElementById('pesquisa').value.trim().toLowerCase();
+    return D.registos.filter(function (r) {
+      if (corte && r.t.slice(0, 10) < corte) return false;
+      if (tipo && r.tipo !== tipo) return false;
+      if (termo) {
+        var palheiro = [r.nome, r.telefone, r.email, r.id].join(' ').toLowerCase();
+        if (palheiro.indexOf(termo) < 0) return false;
       }
+      return true;
+    });
+  }
+
+  function renderTabela() {
+    var lista = registosFiltrados();
+    var total = lista.length;
+    var paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+    if (pagina > paginas) pagina = paginas;
+    var fatia = lista.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+
+    document.getElementById('corpo-tabela').innerHTML = fatia.map(function (r) {
+      var etq = ETQ[r.tipo] || ['etq-visita', r.tipo];
+      var nome = r.nome ? '<span class="nome">' + esc(r.nome) + '</span>' : '<span class="nome">Visitante ' + esc(r.id) + '</span><div class="linha2">não identificado</div>';
+      var contacto = (r.email ? esc(r.email) + '<div class="linha2">' + esc(fmtTel(r.telefone)) + '</div>' : (r.telefone ? esc(fmtTel(r.telefone)) : '–'));
+      var extra = r.tipo === 'esclarecimento' && r.preferencia ? '<div class="linha2">prefere ' + (r.preferencia === 'email' ? 'email' : 'chamada/WhatsApp') + '</div>' : '';
+      return '<tr>' +
+        '<td>' + fmtHora(r.t) + '</td>' +
+        '<td>' + nome + '</td>' +
+        '<td><span class="etq ' + etq[0] + '">' + etq[1] + '</span>' + extra + '</td>' +
+        '<td>' + contacto + '</td>' +
+        '<td>' + esc(r.id) + '</td>' +
+        '<td class="num">' + fmtKz(r.premioAnual) + '</td>' +
+        '<td>' + (r.cotacaoUrl ? '<a href="' + esc(r.cotacaoUrl) + '" target="_blank" rel="noopener">abrir</a>' : '–') + '</td>' +
+        '</tr>';
+    }).join('') || '<tr><td colspan="7" class="vazio">Sem registos para os filtros escolhidos.</td></tr>';
+
+    var inicio = total ? (pagina - 1) * POR_PAGINA + 1 : 0;
+    var fim = Math.min(pagina * POR_PAGINA, total);
+    document.getElementById('contagem').textContent = 'A mostrar ' + inicio + ' – ' + fim + ' de ' + fmtInt(total);
+
+    var pag = document.getElementById('paginacao');
+    var botoes = '<button ' + (pagina <= 1 ? 'disabled' : '') + ' data-p="' + (pagina - 1) + '">&#8249;</button>';
+    var mostrar = [];
+    for (var p = 1; p <= paginas; p++) {
+      if (p === 1 || p === paginas || Math.abs(p - pagina) <= 1) mostrar.push(p);
     }
+    var anterior = 0;
+    mostrar.forEach(function (p) {
+      if (p - anterior > 1) botoes += '<button disabled>…</button>';
+      botoes += '<button class="' + (p === pagina ? 'activa' : '') + '" data-p="' + p + '">' + p + '</button>';
+      anterior = p;
+    });
+    botoes += '<button ' + (pagina >= paginas ? 'disabled' : '') + ' data-p="' + (pagina + 1) + '">&#8250;</button>';
+    pag.innerHTML = botoes;
+    pag.querySelectorAll('button[data-p]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var p = Number(b.getAttribute('data-p'));
+        if (p >= 1 && p <= paginas) { pagina = p; renderTabela(); }
+      });
+    });
+  }
+
+  /* ---------- orquestração ---------- */
+  function renderTudo() {
+    var dias = diasDoPeriodo(Number(document.getElementById('periodo').value));
+    renderKpis(dias);
+    renderGrafico(dias);
+    renderPaineis(dias);
+    pagina = 1;
+    renderTabela();
+  }
+
+  document.getElementById('periodo').addEventListener('change', renderTudo);
+  document.getElementById('filtro-tipo').addEventListener('change', function () { pagina = 1; renderTabela(); });
+  document.getElementById('pesquisa').addEventListener('input', function () { pagina = 1; renderTabela(); });
+  document.getElementById('limpar').addEventListener('click', function () {
+    document.getElementById('pesquisa').value = '';
+    document.getElementById('filtro-tipo').value = '';
+    pagina = 1; renderTabela();
   });
 
-  /* pedidos por tipo */
-  new Chart(document.getElementById('g-tipos'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Contratação', 'Esclarec. · Chamada', 'Esclarec. · Email', 'Cotação PDF'],
-      datasets: [{ data: D.tipos, backgroundColor: ['#7FBE3D', '#4F79D0', '#A5D468', '#5B6E93'], borderColor: '#0E1F3C', borderWidth: 3 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false, cutout: '68%',
-      plugins: { legend: { position: 'right', labels: { boxWidth: 9, boxHeight: 9, usePointStyle: true, pointStyle: 'circle' } } }
-    }
-  });
+  renderTudo();
 })();
 </script>
 </body>

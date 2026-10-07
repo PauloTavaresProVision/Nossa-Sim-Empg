@@ -5,9 +5,9 @@
  * próprias rotas onde acontecem.
  */
 
-import { registarEvento } from '../../../lib/eventos';
+import { registarEvento, classificarOrigem } from '../../../lib/eventos';
 
-const TIPOS_BEACON = ['visita', 'simulacao', 'sessao'];
+const TIPOS_BEACON = ['visita', 'simulacao', 'simulacao_inicio', 'sessao'];
 
 const MAX_PEDIDOS = 60;         // beacons por IP...
 const JANELA_MS   = 10 * 60e3;  // ...nesta janela
@@ -35,7 +35,10 @@ export async function POST(request) {
 
   /* dados adicionais, saneados por tipo (apenas números/valores esperados) */
   const extra = {};
-  if (corpo.tipo === 'simulacao') {
+  if (corpo.tipo === 'visita') {
+    extra.origem = classificarOrigem(corpo.referrer);
+    extra.dispositivo = corpo.dispositivo === 'movel' ? 'movel' : 'computador';
+  } else if (corpo.tipo === 'simulacao') {
     const num = (v, max) => (Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= max ? Number(v) : null);
     if (num(corpo.empregados, 50) !== null) extra.empregados = Number(corpo.empregados);
     if (num(corpo.massaMensal, 1e10) !== null) extra.massaMensal = Number(corpo.massaMensal);

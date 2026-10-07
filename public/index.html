@@ -1151,15 +1151,40 @@
     } catch (e) {}
   }
 
-  /* visita: uma por sessão (refrescar a página não conta de novo) */
+  /* visita: uma por sessão (refrescar a página não conta de novo),
+     com origem (referrer) e tipo de dispositivo */
   (function () {
     var jaVisitou = false;
     try { jaVisitou = sessionStorage.getItem('visitou') === '1'; } catch (e) {}
     if (!jaVisitou) {
       try { sessionStorage.setItem('visitou', '1'); } catch (e) {}
-      beacon('visita');
+      var referrer = '';
+      try { referrer = document.referrer || ''; } catch (e) {}
+      try {
+        fetch('/api/evento', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tipo: 'visita',
+            referrer: referrer.slice(0, 200),
+            dispositivo: (window.innerWidth < 820 || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) ? 'movel' : 'computador'
+          }),
+          keepalive: true
+        }).catch(function () {});
+      } catch (e) {}
     }
   })();
+
+  /* simulação iniciada: primeira tecla num salário, uma por sessão
+     (para medir as simulações não concluídas) */
+  var jaIniciou = false;
+  try { jaIniciou = sessionStorage.getItem('iniciou') === '1'; } catch (e) {}
+  function marcarInicioSimulacao() {
+    if (jaIniciou) return;
+    jaIniciou = true;
+    try { sessionStorage.setItem('iniciou', '1'); } catch (e) {}
+    beacon('simulacao_inicio');
+  }
 
   /* simulação: uma por sessão, enviada 5s depois da ÚLTIMA alteração,
      para registar os valores finais e não a primeira tecla */
@@ -1169,6 +1194,7 @@
   var simulacaoTimer = null;
 
   function marcarSimulacao(dados) {
+    if (dados && dados.massaMensal > 0) marcarInicioSimulacao();
     if (jaSimulou || !dados) return;
     if (!(dados.massaMensal > 0)) { simulacaoPendente = null; clearTimeout(simulacaoTimer); return; }
     simulacaoPendente = dados;
