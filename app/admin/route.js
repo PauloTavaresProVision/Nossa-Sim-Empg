@@ -6,7 +6,8 @@ import { sessaoValida, ADMIN_CONFIGURADO } from '../../lib/admin';
 
 export async function GET(request) {
   if (sessaoValida(request)) {
-    return Response.redirect(new URL('/admin/relatorio', request.url), 303);
+    /* redirect relativo: atrás do proxy o request.url traz o host interno */
+    return new Response(null, { status: 303, headers: { Location: '/admin/relatorio' } });
   }
 
   const erro = new URL(request.url).searchParams.get('erro');

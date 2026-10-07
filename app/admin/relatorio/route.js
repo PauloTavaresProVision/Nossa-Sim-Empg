@@ -14,7 +14,7 @@ function pct(parte, todo) {
 
 export async function GET(request) {
   if (!sessaoValida(request)) {
-    return Response.redirect(new URL('/admin', request.url), 303);
+    return new Response(null, { status: 303, headers: { Location: '/admin' } });
   }
 
   const { totais, porDia } = agregarPorDia(await lerEventos());

@@ -30,17 +30,17 @@ export async function POST(request) {
     user = String(dados.get('user') || '');
     pass = String(dados.get('pass') || '');
   } catch {
-    return Response.redirect(new URL('/admin?erro=1', request.url), 303);
+    return new Response(null, { status: 303, headers: { Location: '/admin?erro=1' } });
   }
 
   if (!credenciaisValidas(user, pass)) {
     console.warn('[admin] tentativa de login falhada para o utilizador "' + user.slice(0, 30) + '"');
-    return Response.redirect(new URL('/admin?erro=1', request.url), 303);
+    return new Response(null, { status: 303, headers: { Location: '/admin?erro=1' } });
   }
 
-  const destino = new URL('/admin/relatorio', request.url);
+  /* redirects relativos: atrás do proxy o request.url traz o host interno */
   return new Response(null, {
     status: 303,
-    headers: { Location: destino.toString(), 'Set-Cookie': cabecalhoSessao(criarToken()) },
+    headers: { Location: '/admin/relatorio', 'Set-Cookie': cabecalhoSessao(criarToken()) },
   });
 }
