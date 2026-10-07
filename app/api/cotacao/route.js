@@ -49,7 +49,7 @@ export async function POST(request) {
 
   try {
     const bytes = await gerarPdfBytes({ nome, telefone, empregados, opcoes: normalizarOpcoes(corpo) });
-    registarEvento('pdf');
+    registarEvento('pdf', { nome: nome || undefined, empregados: empregados.length });
     return new Response(bytes, {
       status: 200,
       headers: {

@@ -149,7 +149,15 @@ export async function POST(request) {
 
     if (resultado && resultado.succeeded && resultado.data && resultado.data.success) {
       registarPedido(ip); // conta para o limite apenas quando aceite
-      registarEvento('esclarecimento', { preferencia });
+      registarEvento('esclarecimento', {
+        preferencia,
+        nome,
+        telefone,
+        email: email || undefined,
+        empregados: empregados.length || undefined,
+        premioAnual: empregados.length ? calcularPremios(empregados.map((e) => e.salario), opcoes).premioAnual : undefined,
+        cotacaoUrl: cotacaoUrl || undefined,
+      });
       console.log('[contactar] contacto criado no hopper: id ' + (resultado.data.contact_Id || '?') +
         ' | ' + (preferencia === 'email' ? 'prefere EMAIL' : 'prefere Chamada/WhatsApp') +
         (cotacaoUrl ? ' | cotacao ' + cotacaoUrl : ''));

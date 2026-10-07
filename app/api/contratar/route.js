@@ -113,7 +113,14 @@ export async function POST(request) {
     const registos = pedidosPorIp.get(ip) || [];
     registos.push(Date.now());
     pedidosPorIp.set(ip, registos);
-    registarEvento('contratacao');
+    registarEvento('contratacao', {
+      nome,
+      telefone,
+      empregados: empregados.length,
+      massaAnual: calculo.massaAnual,
+      premioAnual: calculo.premioAnual,
+      formaPagamento: opcoes.formaPagamento,
+    });
 
     return json({ sucesso: true, mensagem: 'Pedido enviado com sucesso.' }, 200);
   } catch (erro) {

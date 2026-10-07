@@ -798,7 +798,15 @@
 
     document.getElementById('p-forma').textContent  = '(' + ROTULO_FORMA[selForma.value] + ')';
     document.getElementById('p-apagar').textContent = formatAOA(premios[selForma.value]);
-    if (typeof marcarSimulacao === 'function') marcarSimulacao(massaMensal);
+    if (typeof marcarSimulacao === 'function') {
+      marcarSimulacao({
+        massaMensal: massaMensal,
+        premioAnual: premioAnual,
+        empregados: comSalario,
+        nSalarios: nSalarios,
+        tipoSalario: tipo
+      });
+    }
 
     document.getElementById('p-semdesconto').textContent = formatAOA(premioSemDesconto);
     document.getElementById('p-desconto').textContent    = '-' + formatAOA(premioSemDesconto - premioAnual);
@@ -1146,15 +1154,45 @@
   /* visita: uma por carregamento da página */
   beacon('visita');
 
-  /* simulação: uma por sessão, no primeiro cálculo com salário preenchido */
+  /* simulação: uma por sessão, no primeiro cálculo com salário preenchido;
+     leva os dados da simulação (sem identificação) para o relatório */
   var jaSimulou = false;
   try { jaSimulou = sessionStorage.getItem('simulou') === '1'; } catch (e) {}
-  function marcarSimulacao(massaMensal) {
-    if (jaSimulou || !(massaMensal > 0)) return;
+  function marcarSimulacao(dados) {
+    if (jaSimulou || !(dados && dados.massaMensal > 0)) return;
     jaSimulou = true;
     try { sessionStorage.setItem('simulou', '1'); } catch (e) {}
-    beacon('simulacao');
+    try {
+      fetch('/api/evento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ tipo: 'simulacao' }, dados)),
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) {}
   }
+
+  /* tempo na página: enviado uma vez, quando a pessoa sai */
+  var inicioVisita = Date.now();
+  var sessaoEnviada = false;
+  function enviarSessao() {
+    if (sessaoEnviada) return;
+    var duracao = Math.round((Date.now() - inicioVisita) / 1000);
+    if (duracao < 3) return;
+    sessaoEnviada = true;
+    var corpo = JSON.stringify({ tipo: 'sessao', duracao: duracao });
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/evento', new Blob([corpo], { type: 'application/json' }));
+      } else {
+        fetch('/api/evento', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corpo, keepalive: true }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+  window.addEventListener('pagehide', enviarSessao);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') enviarSessao();
+  });
 
   /* começa sem dados preenchidos */
   addEmpregado('');

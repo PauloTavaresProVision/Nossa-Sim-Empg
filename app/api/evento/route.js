@@ -7,7 +7,7 @@
 
 import { registarEvento } from '../../../lib/eventos';
 
-const TIPOS_BEACON = ['visita', 'simulacao'];
+const TIPOS_BEACON = ['visita', 'simulacao', 'sessao'];
 
 const MAX_PEDIDOS = 60;         // beacons por IP...
 const JANELA_MS   = 10 * 60e3;  // ...nesta janela
@@ -33,6 +33,21 @@ export async function POST(request) {
 
   if (!TIPOS_BEACON.includes(corpo.tipo)) return new Response(null, { status: 400 });
 
-  await registarEvento(corpo.tipo);
+  /* dados adicionais, saneados por tipo (apenas números/valores esperados) */
+  const extra = {};
+  if (corpo.tipo === 'simulacao') {
+    const num = (v, max) => (Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= max ? Number(v) : null);
+    if (num(corpo.empregados, 50) !== null) extra.empregados = Number(corpo.empregados);
+    if (num(corpo.massaMensal, 1e10) !== null) extra.massaMensal = Number(corpo.massaMensal);
+    if (num(corpo.premioAnual, 1e10) !== null) extra.premioAnual = Number(corpo.premioAnual);
+    if ([12, 13, 13.5, 14].includes(Number(corpo.nSalarios))) extra.nSalarios = Number(corpo.nSalarios);
+    if (['mensal', 'anual', 'semanal', 'diario'].includes(corpo.tipoSalario)) extra.tipoSalario = corpo.tipoSalario;
+  } else if (corpo.tipo === 'sessao') {
+    const d = Number(corpo.duracao);
+    if (!Number.isFinite(d) || d < 3 || d > 7200) return new Response(null, { status: 400 });
+    extra.duracao = Math.round(d);
+  }
+
+  await registarEvento(corpo.tipo, extra);
   return new Response(null, { status: 204 });
 }
