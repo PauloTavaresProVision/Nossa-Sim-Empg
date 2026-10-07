@@ -19,8 +19,8 @@ COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/static ./.next/static
 
-# directório dos PDFs das cotações (montado como volume no docker-compose)
-RUN mkdir -p /app/cotacoes && chown node:node /app/cotacoes
+# directórios dos PDFs das cotações e das métricas (volumes no docker-compose)
+RUN mkdir -p /app/cotacoes /app/dados && chown node:node /app/cotacoes /app/dados
 
 USER node
 EXPOSE 6510

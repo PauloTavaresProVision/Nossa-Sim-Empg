@@ -22,6 +22,11 @@ services:
       - SMTP_FROM=${SMTP_FROM}
       - EMAIL_PROTOCOLOS=${EMAIL_PROTOCOLOS}
       - EMAIL_INFORMACOES=${EMAIL_INFORMACOES}
+      # credenciais do backoffice /admin (relatorio da campanha)
+      - ADMIN_USER=${ADMIN_USER}
+      - ADMIN_PASS=${ADMIN_PASS}
     volumes:
       # os PDFs das cotações sobrevivem a rebuilds do contentor
       - ./cotacoes:/app/cotacoes
+      # eventos das métricas da campanha
+      - ./dados:/app/dados

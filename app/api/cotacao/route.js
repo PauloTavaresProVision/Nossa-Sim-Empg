@@ -5,6 +5,7 @@
  */
 
 import { gerarPdfBytes, normalizarEmpregados, normalizarOpcoes } from '../../../lib/cotacao-pdf';
+import { registarEvento } from '../../../lib/eventos';
 
 const MAX_PEDIDOS = 20;         // downloads por IP...
 const JANELA_MS   = 10 * 60e3;  // ...nesta janela (10 minutos)
@@ -48,6 +49,7 @@ export async function POST(request) {
 
   try {
     const bytes = await gerarPdfBytes({ nome, telefone, empregados, opcoes: normalizarOpcoes(corpo) });
+    registarEvento('pdf');
     return new Response(bytes, {
       status: 200,
       headers: {

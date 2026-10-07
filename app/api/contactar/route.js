@@ -12,6 +12,7 @@
 
 import { gerarPdfCotacao, calcularPremios, normalizarEmpregados, normalizarOpcoes, FORMAS_PAGAMENTO } from '../../../lib/cotacao-pdf';
 import { enviarEmail, SMTP_CONFIGURADO } from '../../../lib/email';
+import { registarEvento } from '../../../lib/eventos';
 
 /* destino do email "Pedido de Informações" (preferência Email no Quero Saber Mais) */
 const EMAIL_INFORMACOES = process.env.EMAIL_INFORMACOES || process.env.EMAIL_PROTOCOLOS || 'dep.protocolos@nossaseguros.ao';
@@ -110,8 +111,9 @@ export async function POST(request) {
     try {
       const id = await gerarPdfCotacao({ nome, telefone, empregados, opcoes });
       cotacaoUrl = PUBLIC_BASE_URL + '/cotacoes/' + id;
-    } catch {
+    } catch (erro) {
       cotacaoUrl = null; // sem PDF o pedido de contacto segue na mesma
+      console.error('[contactar] falha ao gerar/gravar a cotação (field11 segue sem link):', erro && erro.message ? erro.message : erro);
     }
   }
 
@@ -147,6 +149,7 @@ export async function POST(request) {
 
     if (resultado && resultado.succeeded && resultado.data && resultado.data.success) {
       registarPedido(ip); // conta para o limite apenas quando aceite
+      registarEvento('esclarecimento', { preferencia });
       console.log('[contactar] contacto criado no hopper: id ' + (resultado.data.contact_Id || '?') +
         ' | ' + (preferencia === 'email' ? 'prefere EMAIL' : 'prefere Chamada/WhatsApp') +
         (cotacaoUrl ? ' | cotacao ' + cotacaoUrl : ''));

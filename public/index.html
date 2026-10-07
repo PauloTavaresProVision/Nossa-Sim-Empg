@@ -798,6 +798,8 @@
 
     document.getElementById('p-forma').textContent  = '(' + ROTULO_FORMA[selForma.value] + ')';
     document.getElementById('p-apagar').textContent = formatAOA(premios[selForma.value]);
+    if (typeof marcarSimulacao === 'function') marcarSimulacao(massaMensal);
+
     document.getElementById('p-semdesconto').textContent = formatAOA(premioSemDesconto);
     document.getElementById('p-desconto').textContent    = '-' + formatAOA(premioSemDesconto - premioAnual);
     document.getElementById('p-anual').textContent       = formatAOA(premioAnual);
@@ -1128,6 +1130,31 @@
 
   btnAdd.addEventListener('click', function () { addEmpregado(''); });
   document.getElementById('ano').textContent = String(new Date().getFullYear());
+
+  /* --------- métricas da campanha (beacons anónimos) --------- */
+  function beacon(tipo) {
+    try {
+      fetch('/api/evento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: tipo }),
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  /* visita: uma por carregamento da página */
+  beacon('visita');
+
+  /* simulação: uma por sessão, no primeiro cálculo com salário preenchido */
+  var jaSimulou = false;
+  try { jaSimulou = sessionStorage.getItem('simulou') === '1'; } catch (e) {}
+  function marcarSimulacao(massaMensal) {
+    if (jaSimulou || !(massaMensal > 0)) return;
+    jaSimulou = true;
+    try { sessionStorage.setItem('simulou', '1'); } catch (e) {}
+    beacon('simulacao');
+  }
 
   /* começa sem dados preenchidos */
   addEmpregado('');

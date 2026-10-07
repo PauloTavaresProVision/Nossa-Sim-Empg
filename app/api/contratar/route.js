@@ -11,6 +11,7 @@
 
 import { gerarPdfBytes, calcularPremios, normalizarEmpregados, normalizarOpcoes, FORMAS_PAGAMENTO, DESCONTO } from '../../../lib/cotacao-pdf';
 import { enviarEmail, SMTP_CONFIGURADO } from '../../../lib/email';
+import { registarEvento } from '../../../lib/eventos';
 
 const EMAIL_PROTOCOLOS = process.env.EMAIL_PROTOCOLOS || 'dep.protocolos@nossaseguros.ao';
 
@@ -112,6 +113,7 @@ export async function POST(request) {
     const registos = pedidosPorIp.get(ip) || [];
     registos.push(Date.now());
     pedidosPorIp.set(ip, registos);
+    registarEvento('contratacao');
 
     return json({ sucesso: true, mensagem: 'Pedido enviado com sucesso.' }, 200);
   } catch (erro) {
