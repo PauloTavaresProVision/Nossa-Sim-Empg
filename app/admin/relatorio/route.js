@@ -1,8 +1,7 @@
 /**
  * GET /admin/relatorio — dashboard da campanha (requer sessão de backoffice).
- * Funil, tempo médio na página, gráfico diário (14 dias), pedidos
- * identificados (contratação/esclarecimento), simulações recentes,
- * quebra diária e exportação CSV.
+ * Tema escuro NOSSA, gráficos Chart.js (evolução 30 dias, funil, pedidos por
+ * tipo), KPIs, pedidos/cotações identificados e simulações recentes.
  */
 
 import { sessaoValida } from '../../../lib/admin';
@@ -29,7 +28,7 @@ function fmtHora(iso) {
 }
 
 function fmtDuracao(seg) {
-  if (!seg) return '-';
+  if (!seg) return '—';
   const m = Math.floor(seg / 60), s = seg % 60;
   return m ? m + 'm ' + String(s).padStart(2, '0') + 's' : s + 's';
 }
@@ -37,40 +36,6 @@ function fmtDuracao(seg) {
 function pct(parte, todo) {
   if (!todo) return '—';
   return (100 * parte / todo).toFixed(1).replace('.', ',') + '%';
-}
-
-/* gráfico de barras dos últimos 14 dias (visitas vs simulações), SVG puro */
-function grafico(porDia) {
-  const dias = [];
-  const hoje = new Date();
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(hoje.getTime() - i * 24 * 60 * 60e3);
-    dias.push(FMT_DIA_LUANDA.format(d));
-  }
-  const mapa = new Map(porDia.map((d) => [d.dia, d]));
-  const serie = dias.map((dia) => ({ dia, v: mapa.get(dia)?.visita || 0, s: mapa.get(dia)?.simulacao || 0 }));
-  const maximo = Math.max(1, ...serie.map((p) => Math.max(p.v, p.s)));
-
-  const L = 720, A = 170, base = 140, topo = 14;
-  const passo = L / serie.length;
-  const altura = (n) => Math.round((base - topo) * n / maximo);
-
-  let barras = '';
-  serie.forEach((p, i) => {
-    const x = i * passo;
-    const lgCurta = p.dia.slice(8, 10) + '/' + p.dia.slice(5, 7);
-    const hv = altura(p.v), hs = altura(p.s);
-    barras += `<rect x="${(x + passo * 0.16).toFixed(1)}" y="${base - hv}" width="${(passo * 0.3).toFixed(1)}" height="${hv}" rx="2" fill="#102E60"/>`;
-    barras += `<rect x="${(x + passo * 0.52).toFixed(1)}" y="${base - hs}" width="${(passo * 0.3).toFixed(1)}" height="${hs}" rx="2" fill="#7FBE3D"/>`;
-    if (p.v) barras += `<text x="${(x + passo * 0.31).toFixed(1)}" y="${base - hv - 4}" font-size="9" fill="#3D4660" text-anchor="middle">${p.v}</text>`;
-    if (p.s) barras += `<text x="${(x + passo * 0.67).toFixed(1)}" y="${base - hs - 4}" font-size="9" fill="#3D4660" text-anchor="middle">${p.s}</text>`;
-    barras += `<text x="${(x + passo / 2).toFixed(1)}" y="${base + 16}" font-size="8.5" fill="#6B7591" text-anchor="middle">${lgCurta}</text>`;
-  });
-
-  return `<svg viewBox="0 0 ${L} ${A}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">
-    <line x1="0" y1="${base}" x2="${L}" y2="${base}" stroke="#D6DBE6" stroke-width="1"/>
-    ${barras}
-  </svg>`;
 }
 
 export async function GET(request) {
@@ -83,17 +48,41 @@ export async function GET(request) {
   const { pedidos, simulacoes } = listasRecentes(eventos);
   const geradoEm = new Date().toLocaleString('pt-PT', { timeZone: 'Africa/Luanda' });
 
+  /* série dos últimos 30 dias para o gráfico de evolução */
+  const mapaDias = new Map(porDia.map((d) => [d.dia, d]));
+  const serie = { rotulos: [], visitas: [], simulacoes: [], pedidos: [] };
+  const agora = new Date();
+  for (let i = 29; i >= 0; i--) {
+    const dia = FMT_DIA_LUANDA.format(new Date(agora.getTime() - i * 24 * 60 * 60e3));
+    const d = mapaDias.get(dia);
+    serie.rotulos.push(dia.slice(8, 10) + '/' + dia.slice(5, 7));
+    serie.visitas.push(d ? d.visita : 0);
+    serie.simulacoes.push(d ? d.simulacao : 0);
+    serie.pedidos.push(d ? d.esclarecimento + d.contratacao : 0);
+  }
+
+  const dadosGraficos = {
+    serie,
+    funil: [totais.visita, totais.simulacao, totais.pdf, totais.esclarecimento, totais.contratacao],
+    tipos: [totais.contratacao, totais.esclarecimentoChamada, totais.esclarecimentoEmail, totais.pdf],
+  };
+  const dadosJson = JSON.stringify(dadosGraficos).replace(/</g, '\\u003c');
+
+  const ETQ = {
+    contratacao: '<span class="etq etq-verde">Contratação</span>',
+    esclarecimento: '<span class="etq etq-azul">Esclarecimento</span>',
+    pdf: '<span class="etq etq-cinza">Cotação PDF</span>',
+  };
+
   const linhasPedidos = pedidos.map((p) => `
       <tr>
         <td>${fmtHora(p.t)}</td>
-        <td>${p.tipo === 'contratacao'
-          ? '<span class="etq etq-verde">Contratação</span>'
-          : '<span class="etq etq-navy">Esclarecimento</span> <span class="sub">' + (p.preferencia === 'email' ? 'Email' : 'Chamada/WhatsApp') + '</span>'}</td>
-        <td>${esc(p.nome) || '-'}</td>
+        <td>${ETQ[p.tipo] || ''}${p.tipo === 'esclarecimento' ? ' <span class="sub">' + (p.preferencia === 'email' ? 'Email' : 'Chamada/WhatsApp') + '</span>' : ''}</td>
+        <td class="forte">${esc(p.nome) || '<span class="sub">anónimo</span>'}</td>
         <td>${fmtTel(p.telefone)}</td>
         <td>${esc(p.email) || '-'}</td>
-        <td class="num">${p.premioAnual != null ? fmtKz(p.premioAnual) : '-'}</td>
-        <td>${p.cotacaoUrl ? '<a href="' + esc(p.cotacaoUrl) + '" target="_blank" rel="noopener">PDF</a>' : '-'}</td>
+        <td class="num forte">${p.premioAnual != null ? fmtKz(p.premioAnual) : '-'}</td>
+        <td>${p.cotacaoUrl ? '<a href="' + esc(p.cotacaoUrl) + '" target="_blank" rel="noopener">abrir</a>' : '-'}</td>
       </tr>`).join('');
 
   const rotuloTipoSal = { mensal: 'Mensal', anual: 'Anual', semanal: 'Semanal', diario: 'Diário' };
@@ -102,9 +91,9 @@ export async function GET(request) {
         <td>${fmtHora(s.t)}</td>
         <td class="num">${s.empregados != null ? s.empregados : '-'}</td>
         <td class="num">${s.massaMensal != null ? fmtKz(s.massaMensal) : '-'}</td>
-        <td>${s.nSalarios != null ? String(s.nSalarios).replace('.', ',') : '-'}</td>
+        <td class="num">${s.nSalarios != null ? String(s.nSalarios).replace('.', ',') : '-'}</td>
         <td>${rotuloTipoSal[s.tipoSalario] || '-'}</td>
-        <td class="num">${s.premioAnual != null ? fmtKz(s.premioAnual) : '-'}</td>
+        <td class="num forte">${s.premioAnual != null ? fmtKz(s.premioAnual) : '-'}</td>
       </tr>`).join('');
 
   const linhasDias = porDia.slice(0, 60).map((d) => `
@@ -125,115 +114,156 @@ export async function GET(request) {
 <meta name="robots" content="noindex, nofollow">
 <title>Backoffice | Simulador NOSSA Seguros</title>
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
+  :root {
+    --verde: #7FBE3D; --verde-claro: #A5D468;
+    --azul: #4F79D0; --azul-claro: #86A9E8;
+    --fundo: #081426; --painel: #0E1F3C; --painel-borda: #1C3156;
+    --texto: #E8EEF9; --suave: #8FA2C6; --apagado: #5B6E93;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
-    background: #EEF1F6; color: #1A2238; font-size: 16px; line-height: 1.5;
+    background: radial-gradient(1200px 500px at 80% -10%, #12294E 0%, var(--fundo) 55%);
+    color: var(--texto); font-size: 16px; line-height: 1.5; min-height: 100vh;
   }
-  header { background: #fff; border-bottom: 1px solid #D6DBE6; }
+  header { border-bottom: 1px solid var(--painel-borda); background: rgba(8,20,38,.6); }
   .topo {
-    max-width: 1140px; margin: 0 auto; padding: .8rem 1.25rem;
-    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    max-width: 1240px; margin: 0 auto; padding: .75rem 1.25rem;
+    display: flex; align-items: center; gap: 1rem;
   }
-  .topo img { height: 36px; }
-  .topo .titulo-topo { font-size: .78rem; font-weight: 700; color: #0A1D3F; text-transform: uppercase; letter-spacing: .08em; }
-  .topo .direita { display: flex; align-items: center; gap: 1rem; }
-  .topo a.sair {
-    font-size: .74rem; font-weight: 700; color: #3D4660; text-decoration: none;
-    border: 1px solid #D6DBE6; border-radius: 4px; padding: .35rem .8rem;
+  .chip-logo { background: #fff; border-radius: 8px; padding: .35rem .6rem; line-height: 0; }
+  .chip-logo img { height: 30px; }
+  .topo .titulos { flex: 1; min-width: 0; }
+  .topo h1 { font-size: .95rem; font-weight: 800; letter-spacing: .01em; }
+  .topo .sub-titulo { font-size: .7rem; color: var(--suave); }
+  a.sair {
+    font-size: .72rem; font-weight: 700; color: var(--suave); text-decoration: none;
+    border: 1px solid var(--painel-borda); border-radius: 6px; padding: .4rem .85rem;
+    white-space: nowrap;
   }
-  .topo a.sair:hover { border-color: #102E60; color: #102E60; }
-  main { max-width: 1140px; margin: 0 auto; padding: 1.4rem 1.25rem 2.5rem; }
-  .gerado { font-size: .74rem; color: #6B7591; margin-bottom: 1.1rem; }
+  a.sair:hover { color: #fff; border-color: var(--suave); }
+  main { max-width: 1240px; margin: 0 auto; padding: 1.4rem 1.25rem 3rem; }
+  .gerado { font-size: .72rem; color: var(--apagado); margin-bottom: 1rem; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: .8rem; }
+  .kpi {
+    background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015));
+    border: 1px solid var(--painel-borda); border-radius: 12px;
+    padding: .95rem 1.1rem; position: relative; overflow: hidden;
+  }
+  .kpi::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--verde);
+  }
+  .kpi .rotulo { font-size: .64rem; font-weight: 700; color: var(--suave); text-transform: uppercase; letter-spacing: .1em; }
+  .kpi .numero { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .kpi .delta { font-size: .7rem; color: var(--verde-claro); font-weight: 600; }
+  .kpi .delta.neutro { color: var(--suave); font-weight: 400; }
+  .kpi.destaque { background: linear-gradient(135deg, rgba(127,190,61,.16), rgba(127,190,61,.05)); border-color: rgba(127,190,61,.4); }
+  .kpi.destaque .numero { color: var(--verde-claro); }
+
   h2 {
-    font-size: .8rem; font-weight: 700; color: #0A1D3F;
-    text-transform: uppercase; letter-spacing: .07em;
-    border-left: 4px solid #7FBE3D; padding-left: .7rem;
-    margin: 1.6rem 0 .8rem;
+    font-size: .74rem; font-weight: 800; color: var(--texto);
+    text-transform: uppercase; letter-spacing: .12em;
+    display: flex; align-items: center; gap: .55rem;
+    margin: 1.7rem 0 .8rem;
   }
-  .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .8rem; }
-  .cartao {
-    background: #fff; border: 1px solid #D6DBE6; border-radius: 10px;
-    padding: .95rem 1.05rem;
-    border-top: 3px solid #7FBE3D;
+  h2::before { content: ""; width: 1.4rem; height: 3px; background: var(--verde); border-radius: 2px; }
+
+  .grelha-graficos { display: grid; grid-template-columns: 1.7fr 1fr; gap: .9rem; }
+  @media (max-width: 900px) { .grelha-graficos { grid-template-columns: 1fr; } }
+  .painel {
+    background: var(--painel);
+    border: 1px solid var(--painel-borda); border-radius: 12px;
+    padding: 1rem 1.1rem;
   }
-  .cartao .rotulo { font-size: .66rem; font-weight: 700; color: #6B7591; text-transform: uppercase; letter-spacing: .07em; }
-  .cartao .numero { font-size: 1.8rem; font-weight: 800; color: #0A1D3F; font-variant-numeric: tabular-nums; line-height: 1.2; }
-  .cartao .sub { font-size: .7rem; color: #6B7591; }
-  .cartao.navy { background: #0A1D3F; border-color: #0A1D3F; border-top-color: #7FBE3D; }
-  .cartao.navy .rotulo { color: #A5D468; }
-  .cartao.navy .numero { color: #fff; }
-  .cartao.navy .sub { color: #8FA2C6; }
-  .painel { background: #fff; border: 1px solid #D6DBE6; border-radius: 10px; padding: 1rem 1.1rem; }
-  .legenda { display: flex; gap: 1.2rem; font-size: .72rem; color: #3D4660; margin-bottom: .5rem; }
-  .legenda span::before { content: ""; display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; }
-  .legenda .lv::before { background: #102E60; }
-  .legenda .ls::before { background: #7FBE3D; }
-  .tabela-scroll { overflow-x: auto; background: #fff; border: 1px solid #D6DBE6; border-radius: 10px; }
+  .painel h3 { font-size: .72rem; font-weight: 700; color: var(--suave); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .7rem; }
+  .grafico-alto { height: 300px; position: relative; }
+  .grafico-medio { height: 136px; position: relative; }
+  .coluna { display: flex; flex-direction: column; gap: .9rem; }
+
+  .tabela-scroll { overflow-x: auto; background: var(--painel); border: 1px solid var(--painel-borda); border-radius: 12px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { padding: .5rem .8rem; font-size: .8rem; text-align: left; border-bottom: 1px solid #E8EBF2; white-space: nowrap; }
+  th, td { padding: .55rem .85rem; font-size: .78rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,.05); white-space: nowrap; color: var(--suave); }
+  td.forte { color: var(--texto); font-weight: 600; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  th { background: #0A1D3F; color: #fff; font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; position: sticky; top: 0; }
-  tr:nth-child(even) td { background: #FAFBFD; }
+  th { font-size: .62rem; text-transform: uppercase; letter-spacing: .09em; color: var(--apagado); background: rgba(255,255,255,.025); }
   tr:last-child td { border-bottom: none; }
-  td a { color: #102E60; font-weight: 700; }
+  tr:hover td { background: rgba(255,255,255,.025); }
+  td a { color: var(--verde-claro); font-weight: 700; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
   .etq {
-    display: inline-block; font-size: .64rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: .04em;
-    padding: .12rem .45rem; border-radius: 3px;
+    display: inline-block; font-size: .6rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: .16rem .5rem; border-radius: 99px;
   }
-  .etq-verde { background: #7FBE3D; color: #fff; }
-  .etq-navy { background: #EAF0FA; color: #102E60; border: 1px solid #C6D4EC; }
-  .sub { font-size: .7rem; color: #6B7591; }
-  .vazio { font-size: .82rem; color: #6B7591; padding: 1rem 1.1rem; }
-  .accoes { margin-top: 1.1rem; }
+  .etq-verde { background: rgba(127,190,61,.18); color: var(--verde-claro); border: 1px solid rgba(127,190,61,.45); }
+  .etq-azul { background: rgba(79,121,208,.16); color: var(--azul-claro); border: 1px solid rgba(79,121,208,.45); }
+  .etq-cinza { background: rgba(143,162,198,.12); color: var(--suave); border: 1px solid rgba(143,162,198,.35); }
+  .sub { font-size: .68rem; color: var(--apagado); }
+  .vazio { font-size: .8rem; color: var(--apagado); padding: 1rem 1.1rem; }
+  .accoes { margin-top: 1.2rem; }
   .botao {
-    display: inline-block; background: #7FBE3D; color: #fff; text-decoration: none;
-    font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-    padding: .6rem 1.1rem; border-radius: 4px;
+    display: inline-block; background: var(--verde); color: #06101F; text-decoration: none;
+    font-size: .74rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+    padding: .65rem 1.2rem; border-radius: 6px;
   }
-  .botao:hover { background: #689E2F; }
+  .botao:hover { background: var(--verde-claro); }
 </style>
 </head>
 <body>
 <header>
   <div class="topo">
-    <img src="/logo-nossa.png" alt="NOSSA Seguros">
-    <span class="titulo-topo">Backoffice · Simulador Empregados Domésticos</span>
-    <div class="direita"><a class="sair" href="/api/admin/sair">Terminar sessão</a></div>
+    <span class="chip-logo"><img src="/logo-nossa.png" alt="NOSSA Seguros"></span>
+    <div class="titulos">
+      <h1>Campanha Empregados Domésticos</h1>
+      <div class="sub-titulo">Backoffice do simulador · actualizado ${geradoEm} (Luanda)</div>
+    </div>
+    <a class="sair" href="/api/admin/sair">Terminar sessão</a>
   </div>
 </header>
 <main>
-  <p class="gerado">Actualizado em ${geradoEm} (hora de Luanda) · os dados contam desde a activação das métricas</p>
-
-  <div class="cartoes">
-    <div class="cartao"><div class="rotulo">Visitas</div><div class="numero">${totais.visita}</div><div class="sub">abriram o simulador</div></div>
-    <div class="cartao"><div class="rotulo">Tempo médio</div><div class="numero">${fmtDuracao(tempoMedioSegundos)}</div><div class="sub">${numSessoes} sessões medidas</div></div>
-    <div class="cartao"><div class="rotulo">Simularam</div><div class="numero">${totais.simulacao}</div><div class="sub">${pct(totais.simulacao, totais.visita)} das visitas</div></div>
-    <div class="cartao"><div class="rotulo">Guardaram PDF</div><div class="numero">${totais.pdf}</div><div class="sub">cotações descarregadas</div></div>
-    <div class="cartao"><div class="rotulo">Esclarecimento</div><div class="numero">${totais.esclarecimento}</div><div class="sub">${totais.esclarecimentoChamada} chamada · ${totais.esclarecimentoEmail} email</div></div>
-    <div class="cartao navy"><div class="rotulo">Contratação</div><div class="numero">${totais.contratacao}</div><div class="sub">${pct(totais.contratacao, totais.simulacao)} de quem simulou</div></div>
+  <div class="kpis">
+    <div class="kpi"><div class="rotulo">Visitas</div><div class="numero">${totais.visita}</div><div class="delta neutro">sessões únicas</div></div>
+    <div class="kpi"><div class="rotulo">Tempo médio</div><div class="numero">${fmtDuracao(tempoMedioSegundos)}</div><div class="delta neutro">${numSessoes} sessões medidas</div></div>
+    <div class="kpi"><div class="rotulo">Simularam</div><div class="numero">${totais.simulacao}</div><div class="delta">${pct(totais.simulacao, totais.visita)} das visitas</div></div>
+    <div class="kpi"><div class="rotulo">Cotações PDF</div><div class="numero">${totais.pdf}</div><div class="delta neutro">descarregadas</div></div>
+    <div class="kpi"><div class="rotulo">Esclarecimento</div><div class="numero">${totais.esclarecimento}</div><div class="delta neutro">${totais.esclarecimentoChamada} chamada · ${totais.esclarecimentoEmail} email</div></div>
+    <div class="kpi destaque"><div class="rotulo">Contratações</div><div class="numero">${totais.contratacao}</div><div class="delta">${pct(totais.contratacao, totais.simulacao)} de quem simulou</div></div>
   </div>
 
-  <h2>Últimos 14 dias</h2>
-  <div class="painel">
-    <div class="legenda"><span class="lv">Visitas</span><span class="ls">Simulações</span></div>
-    ${grafico(porDia)}
+  <h2>Actividade</h2>
+  <div class="grelha-graficos">
+    <div class="painel">
+      <h3>Evolução · últimos 30 dias</h3>
+      <div class="grafico-alto"><canvas id="g-evolucao"></canvas></div>
+    </div>
+    <div class="coluna">
+      <div class="painel">
+        <h3>Funil da campanha</h3>
+        <div class="grafico-medio"><canvas id="g-funil"></canvas></div>
+      </div>
+      <div class="painel">
+        <h3>Pedidos por tipo</h3>
+        <div class="grafico-medio"><canvas id="g-tipos"></canvas></div>
+      </div>
+    </div>
   </div>
 
-  <h2>Pedidos de contratação e esclarecimento</h2>
+  <h2>Pedidos e cotações identificados</h2>
   <div class="tabela-scroll">
     ${pedidos.length ? `<table>
       <tr><th>Quando</th><th>Tipo</th><th>Nome</th><th>Telefone</th><th>Email</th><th class="num">Prémio anual</th><th>Cotação</th></tr>
       ${linhasPedidos}
-    </table>` : '<p class="vazio">Ainda sem pedidos identificados.</p>'}
+    </table>` : '<p class="vazio">Ainda sem pedidos ou cotações identificados.</p>'}
   </div>
 
   <h2>Simulações recentes</h2>
   <div class="tabela-scroll">
     ${simulacoes.length ? `<table>
-      <tr><th>Quando</th><th class="num">Empregados</th><th class="num">Massa mensal</th><th>N.º salários</th><th>Tipo salário</th><th class="num">Prémio anual</th></tr>
+      <tr><th>Quando</th><th class="num">Empregados</th><th class="num">Massa mensal</th><th class="num">N.º salários</th><th>Tipo salário</th><th class="num">Prémio anual</th></tr>
       ${linhasSimulacoes}
     </table>` : '<p class="vazio">Ainda sem simulações registadas.</p>'}
   </div>
@@ -250,6 +280,76 @@ export async function GET(request) {
     <a class="botao" href="/admin/relatorio-csv">Exportar CSV</a>
   </div>
 </main>
+<script>
+(function () {
+  if (typeof Chart === 'undefined') return; // sem internet para o CDN, o resto do dashboard funciona
+  var D = ${dadosJson};
+  var SUAVE = '#8FA2C6', GRELHA = 'rgba(255,255,255,.055)';
+  Chart.defaults.color = SUAVE;
+  Chart.defaults.font.family = 'ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif';
+  Chart.defaults.font.size = 11;
+
+  /* evolução: área suave com gradientes */
+  var ctx = document.getElementById('g-evolucao').getContext('2d');
+  var gradVerde = ctx.createLinearGradient(0, 0, 0, 300);
+  gradVerde.addColorStop(0, 'rgba(127,190,61,.34)');
+  gradVerde.addColorStop(1, 'rgba(127,190,61,0)');
+  var gradAzul = ctx.createLinearGradient(0, 0, 0, 300);
+  gradAzul.addColorStop(0, 'rgba(79,121,208,.3)');
+  gradAzul.addColorStop(1, 'rgba(79,121,208,0)');
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: D.serie.rotulos,
+      datasets: [
+        { label: 'Visitas', data: D.serie.visitas, borderColor: '#4F79D0', backgroundColor: gradAzul, fill: true, tension: .4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
+        { label: 'Simulações', data: D.serie.simulacoes, borderColor: '#7FBE3D', backgroundColor: gradVerde, fill: true, tension: .4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 },
+        { label: 'Pedidos', data: D.serie.pedidos, borderColor: '#E8EEF9', borderDash: [4, 4], fill: false, tension: .4, borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'circle' } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } },
+        y: { beginAtZero: true, grid: { color: GRELHA }, ticks: { precision: 0 } }
+      }
+    }
+  });
+
+  /* funil horizontal */
+  new Chart(document.getElementById('g-funil'), {
+    type: 'bar',
+    data: {
+      labels: ['Visitas', 'Simularam', 'PDF', 'Esclarecim.', 'Contratação'],
+      datasets: [{ data: D.funil, backgroundColor: ['#2E4F8F', '#4F79D0', '#5E99B8', '#6BB05B', '#7FBE3D'], borderRadius: 4, barThickness: 13 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, grid: { color: GRELHA }, ticks: { precision: 0 } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+
+  /* pedidos por tipo */
+  new Chart(document.getElementById('g-tipos'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Contratação', 'Esclarec. · Chamada', 'Esclarec. · Email', 'Cotação PDF'],
+      datasets: [{ data: D.tipos, backgroundColor: ['#7FBE3D', '#4F79D0', '#A5D468', '#5B6E93'], borderColor: '#0E1F3C', borderWidth: 3 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      plugins: { legend: { position: 'right', labels: { boxWidth: 9, boxHeight: 9, usePointStyle: true, pointStyle: 'circle' } } }
+    }
+  });
+})();
+</script>
 </body>
 </html>`;
 

@@ -1151,22 +1151,40 @@
     } catch (e) {}
   }
 
-  /* visita: uma por carregamento da página */
-  beacon('visita');
+  /* visita: uma por sessão (refrescar a página não conta de novo) */
+  (function () {
+    var jaVisitou = false;
+    try { jaVisitou = sessionStorage.getItem('visitou') === '1'; } catch (e) {}
+    if (!jaVisitou) {
+      try { sessionStorage.setItem('visitou', '1'); } catch (e) {}
+      beacon('visita');
+    }
+  })();
 
-  /* simulação: uma por sessão, no primeiro cálculo com salário preenchido;
-     leva os dados da simulação (sem identificação) para o relatório */
+  /* simulação: uma por sessão, enviada 5s depois da ÚLTIMA alteração,
+     para registar os valores finais e não a primeira tecla */
   var jaSimulou = false;
   try { jaSimulou = sessionStorage.getItem('simulou') === '1'; } catch (e) {}
+  var simulacaoPendente = null;
+  var simulacaoTimer = null;
+
   function marcarSimulacao(dados) {
-    if (jaSimulou || !(dados && dados.massaMensal > 0)) return;
+    if (jaSimulou || !dados) return;
+    if (!(dados.massaMensal > 0)) { simulacaoPendente = null; clearTimeout(simulacaoTimer); return; }
+    simulacaoPendente = dados;
+    clearTimeout(simulacaoTimer);
+    simulacaoTimer = setTimeout(enviarSimulacao, 5000);
+  }
+
+  function enviarSimulacao() {
+    if (jaSimulou || !simulacaoPendente) return;
     jaSimulou = true;
     try { sessionStorage.setItem('simulou', '1'); } catch (e) {}
     try {
       fetch('/api/evento', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.assign({ tipo: 'simulacao' }, dados)),
+        body: JSON.stringify(Object.assign({ tipo: 'simulacao' }, simulacaoPendente)),
         keepalive: true
       }).catch(function () {});
     } catch (e) {}
@@ -1176,6 +1194,7 @@
   var inicioVisita = Date.now();
   var sessaoEnviada = false;
   function enviarSessao() {
+    enviarSimulacao(); // se havia simulação por enviar, sai com os valores finais
     if (sessaoEnviada) return;
     var duracao = Math.round((Date.now() - inicioVisita) / 1000);
     if (duracao < 3) return;

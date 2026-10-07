@@ -4,7 +4,7 @@
  * contacta a uCall; apenas recalcula os prémios no servidor e devolve o PDF.
  */
 
-import { gerarPdfBytes, normalizarEmpregados, normalizarOpcoes } from '../../../lib/cotacao-pdf';
+import { gerarPdfBytes, normalizarEmpregados, normalizarOpcoes, calcularPremios } from '../../../lib/cotacao-pdf';
 import { registarEvento } from '../../../lib/eventos';
 
 const MAX_PEDIDOS = 20;         // downloads por IP...
@@ -48,8 +48,16 @@ export async function POST(request) {
   }
 
   try {
-    const bytes = await gerarPdfBytes({ nome, telefone, empregados, opcoes: normalizarOpcoes(corpo) });
-    registarEvento('pdf', { nome: nome || undefined, empregados: empregados.length });
+    const opcoes = normalizarOpcoes(corpo);
+    const bytes = await gerarPdfBytes({ nome, telefone, empregados, opcoes });
+    const calc = calcularPremios(empregados.map((e) => e.salario), opcoes);
+    registarEvento('pdf', {
+      nome: nome || undefined,
+      telefone: telefone || undefined,
+      empregados: empregados.length,
+      massaMensal: calc.massaMensal,
+      premioAnual: calc.premioAnual,
+    });
     return new Response(bytes, {
       status: 200,
       headers: {
