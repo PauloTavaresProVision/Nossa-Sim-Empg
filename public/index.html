@@ -564,7 +564,7 @@
     </div>
 
     <table class="tabela-premios">
-      <tr><td>Prémio anual sem desconto</td><td class="valor-riscado"><span id="p-semdesconto">0,00</span> <span class="aoa">Kz</span></td></tr>
+      <tr><td>Prémio anual sem desconto</td><td id="celula-semdesconto"><span id="p-semdesconto">0,00</span> <span class="aoa">Kz</span></td></tr>
       <tr class="linha-desconto"><td>Desconto de campanha (15%)</td><td><span id="p-desconto">-0,00</span> <span class="aoa">Kz</span></td></tr>
       <tr><td>Prémio anual</td><td><span id="p-anual">0,00</span> <span class="aoa">Kz</span></td></tr>
       <tr><td>Prémio semestral</td><td><span id="p-semestral">0,00</span> <span class="aoa">Kz</span></td></tr>
@@ -808,6 +808,8 @@
       });
     }
 
+    /* o riscado só faz sentido quando há valor; a zeros fica normal */
+    document.getElementById('celula-semdesconto').classList.toggle('valor-riscado', premioSemDesconto > 0);
     document.getElementById('p-semdesconto').textContent = formatAOA(premioSemDesconto);
     document.getElementById('p-desconto').textContent    = '-' + formatAOA(premioSemDesconto - premioAnual);
     document.getElementById('p-anual').textContent       = formatAOA(premioAnual);
