@@ -1158,8 +1158,9 @@
     try { jaVisitou = sessionStorage.getItem('visitou') === '1'; } catch (e) {}
     if (!jaVisitou) {
       try { sessionStorage.setItem('visitou', '1'); } catch (e) {}
-      var referrer = '';
+      var referrer = '', utm = '';
       try { referrer = document.referrer || ''; } catch (e) {}
+      try { utm = new URLSearchParams(location.search).get('utm_source') || ''; } catch (e) {}
       try {
         fetch('/api/evento', {
           method: 'POST',
@@ -1167,6 +1168,7 @@
           body: JSON.stringify({
             tipo: 'visita',
             referrer: referrer.slice(0, 200),
+            utm: utm.slice(0, 60),
             dispositivo: (window.innerWidth < 820 || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) ? 'movel' : 'computador'
           }),
           keepalive: true

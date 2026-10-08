@@ -36,7 +36,7 @@ export async function POST(request) {
   /* dados adicionais, saneados por tipo (apenas números/valores esperados) */
   const extra = {};
   if (corpo.tipo === 'visita') {
-    extra.origem = classificarOrigem(corpo.referrer);
+    extra.origem = classificarOrigem(corpo.referrer, corpo.utm);
     extra.dispositivo = corpo.dispositivo === 'movel' ? 'movel' : 'computador';
   } else if (corpo.tipo === 'simulacao') {
     const num = (v, max) => (Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= max ? Number(v) : null);
