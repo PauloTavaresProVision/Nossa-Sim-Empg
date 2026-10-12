@@ -677,9 +677,10 @@
   /* ================= Parâmetros do modelo (Excel "Simulador VF") =================
      Prémio Anual = Massa Anual × 2% × 1,425 × (1 − 15%)
      Massa Anual  = salário mensal equivalente × n.º de salários                 */
-  var TAXA_SIMPLES     = 0.02;
-  var FACTOR_COMERCIAL = 1.425;
-  var DESCONTO         = 0.15;
+  var TAXA_SIMPLES          = 0.02;
+  var FACTOR_COMERCIAL      = 1.425;
+  var DESCONTO              = 0.15;
+  var AGRAVAMENTO_SEMESTRAL = 0.04; // fracção semestral: (anual/2) × (1+4%)
 
   /* conversão do salário introduzido para equivalente mensal, por tipo */
   var PARA_MENSAL = {
@@ -788,7 +789,7 @@
     var massaAnual         = massaMensal * nSalarios;
     var premioSemDesconto  = massaAnual * TAXA_SIMPLES * FACTOR_COMERCIAL;
     var premioAnual        = premioSemDesconto * (1 - DESCONTO);
-    var premioSemestral    = premioAnual / 2;
+    var premioSemestral    = (premioAnual / 2) * (1 + AGRAVAMENTO_SEMESTRAL);
     var premios = { anual: premioAnual, semestral: premioSemestral };
 
     document.getElementById('r-num').textContent    = String(Math.max(comSalario, inputs.length ? 1 : 0));
