@@ -1,0 +1,31 @@
+# Instância de TESTE/homologação — corre lado a lado com a produção, noutra
+# pasta (ex.: /opt/Nossa-Sim-Empg-teste, no ramo "teste") e noutra porta:
+#   docker compose -f docker-compose.teste.yml up -d --build
+# URL de validação: http://IP-DO-SERVIDOR:6520
+services:
+  simulador-teste:
+    build: .
+    container_name: nossa-simulador-teste
+    restart: unless-stopped
+    ports:
+      - "6520:6520"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    environment:
+      - PORT=6520
+      # definir em .env desta pasta (PUBLIC_BASE_URL deve apontar à porta 6520)
+      - UCALL_APIKEY=${UCALL_APIKEY}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
+      - EMAIL_PROTOCOLOS=${EMAIL_PROTOCOLOS}
+      - EMAIL_INFORMACOES=${EMAIL_INFORMACOES}
+      - ADMIN_USER=${ADMIN_USER}
+      - ADMIN_PASS=${ADMIN_PASS}
+    volumes:
+      - ./cotacoes:/app/cotacoes
+      - ./dados:/app/dados

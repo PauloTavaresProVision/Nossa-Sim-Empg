@@ -63,6 +63,12 @@ export async function POST(request) {
     return json({ sucesso: false, mensagem: 'Indique um telefone válido (9 dígitos, começado por 9).' }, 422);
   }
 
+  /* email opcional; quando vem, tem de ser válido (entra no PDF e no email ao departamento) */
+  let email = String(corpo.email || '').trim().slice(0, 100);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    return json({ sucesso: false, mensagem: 'Indique um email válido ou deixe o campo em branco.' }, 422);
+  }
+
   const empregados = normalizarEmpregados(corpo);
   if (!empregados.length) {
     return json({ sucesso: false, mensagem: 'Indique pelo menos um salário para gerar a cotação.' }, 422);
@@ -77,13 +83,14 @@ export async function POST(request) {
   const telFormatado = '(+244) ' + telefone.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
 
   try {
-    const pdf = await gerarPdfBytes({ nome, telefone, empregados, opcoes });
+    const pdf = await gerarPdfBytes({ nome, telefone, email, empregados, opcoes });
 
     const linhas = [
       'Pedido de contratação recebido através do simulador do site.',
       '',
       'Tomador do Seguro: ' + nome,
       'Telefone: ' + telFormatado,
+      ...(email ? ['Email: ' + email] : []),
       'N.º de empregados: ' + empregados.length,
       'Forma de pagamento: ' + FORMAS_PAGAMENTO[opcoes.formaPagamento],
     ];
@@ -104,6 +111,7 @@ export async function POST(request) {
 
     await enviarEmail({
       to: EMAIL_PROTOCOLOS,
+      replyTo: email || undefined,
       subject: 'Pedido de Contratação - Seguro Empregados Domésticos - ' + nome,
       text: linhas.join('\n'),
       attachments: [{ filename: 'cotacao-nossa-seguros.pdf', content: Buffer.from(pdf) }],
@@ -116,6 +124,7 @@ export async function POST(request) {
     registarEvento('contratacao', {
       nome,
       telefone,
+      email: email || undefined,
       empregados: empregados.length,
       massaAnual: calculo.massaAnual,
       premioAnual: calculo.premioAnual,

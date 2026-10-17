@@ -46,6 +46,7 @@ export async function GET(request) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --navy: #0A1D3F; --navy-2: #13306B; --azul: #4F79D0; --verde: #7FBE3D;
@@ -82,7 +83,7 @@ export async function GET(request) {
   .cabeca h1 { font-size: 1.9rem; font-weight: 900; color: var(--navy); letter-spacing: -.01em; }
   .cabeca p { color: var(--suave); font-size: .95rem; }
   .cabeca .controles { margin-left: auto; display: flex; gap: .6rem; align-items: center; }
-  select.periodo, a.exportar {
+  select.periodo, button.exportar {
     height: 2.7rem; border: 1px solid var(--borda); border-radius: 8px;
     background: #fff; color: var(--texto);
     font-family: inherit; font-size: .86rem; font-weight: 700;
@@ -90,7 +91,7 @@ export async function GET(request) {
     display: inline-flex; align-items: center; gap: .5rem;
   }
   select.periodo:focus { outline: none; border-color: var(--azul); }
-  a.exportar:hover, select.periodo:hover { border-color: var(--apagado); }
+  button.exportar:hover, select.periodo:hover { border-color: var(--apagado); }
 
   .kpis {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
@@ -205,7 +206,7 @@ export async function GET(request) {
         <option value="90">Últimos 90 dias</option>
         <option value="0">Desde o início</option>
       </select>
-      <a class="exportar" href="/admin/relatorio-csv">&#8681; Exportar</a>
+      <button type="button" class="exportar" id="exportar-excel">&#8681; Exportar Excel</button>
     </div>
   </div>
 
@@ -398,16 +399,28 @@ var D = ${dadosJson};
   var pagina = 1;
   var POR_PAGINA = 10;
 
+  /* pesquisa tolerante: ignora acentos e maiúsculas ("encarnacao" encontra
+     "ENCARNAÇÃO") e aceita telefones como aparecem na tabela, com espaços
+     e indicativo ("939 390 661" ou "+244 939390661" encontram 939390661) */
+  var semAcentos = function (s) {
+    return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+  };
+
   function registosFiltrados() {
     var corte = dataCorte(Number(document.getElementById('periodo').value));
     var tipo = document.getElementById('filtro-tipo').value;
-    var termo = document.getElementById('pesquisa').value.trim().toLowerCase();
+    var termo = semAcentos(document.getElementById('pesquisa').value.trim());
+    var termoDigitos = termo.replace(/\\D/g, '');
     return D.registos.filter(function (r) {
-      if (corte && r.t.slice(0, 10) < corte) return false;
+      /* com pesquisa activa o período não corta: quem pesquisa quer
+         encontrar o registo mesmo que seja antigo */
+      if (corte && !termo && r.t.slice(0, 10) < corte) return false;
       if (tipo && r.tipo !== tipo) return false;
       if (termo) {
-        var palheiro = [r.nome, r.telefone, r.email, r.id].join(' ').toLowerCase();
-        if (palheiro.indexOf(termo) < 0) return false;
+        var bateTexto = semAcentos([r.nome, r.email, r.id].join(' ')).indexOf(termo) >= 0;
+        var bateTelefone = termoDigitos.length >= 3 && r.telefone &&
+          ('244' + r.telefone).indexOf(termoDigitos) >= 0;
+        if (!bateTexto && !bateTelefone) return false;
       }
       return true;
     });
@@ -471,6 +484,41 @@ var D = ${dadosJson};
     pagina = 1;
     renderTabela();
   }
+
+  /* ---------- exportar Excel: as mesmas linhas e colunas da listagem,
+     respeitando a pesquisa e os filtros activos ---------- */
+  document.getElementById('exportar-excel').addEventListener('click', function () {
+    if (typeof XLSX === 'undefined') {
+      alert('Não foi possível carregar o módulo de exportação. Verifique a ligação à internet e recarregue a página.');
+      return;
+    }
+    var lista = registosFiltrados();
+    var linhas = [['Data / Hora', 'Visitante', 'Actividade', 'Contacto', 'Ref.', 'Prémio anual (Kz)', 'Cotação']];
+    lista.forEach(function (r) {
+      var etq = ETQ[r.tipo] || ['', r.tipo];
+      var actividade = etq[1] + (r.tipo === 'esclarecimento' && r.preferencia
+        ? ' (prefere ' + (r.preferencia === 'email' ? 'email' : 'chamada/WhatsApp') + ')' : '');
+      var contacto = [r.telefone ? fmtTel(r.telefone) : '', r.email || ''].filter(Boolean).join(' · ');
+      linhas.push([
+        new Date(r.t).toLocaleString('pt-PT', { timeZone: 'Africa/Luanda', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        r.nome || 'Visitante ' + r.id + ' (não identificado)',
+        actividade,
+        contacto || '–',
+        r.id,
+        r.premioAnual == null ? '' : Number(r.premioAnual),
+        r.cotacaoUrl || ''
+      ]);
+    });
+    var folha = XLSX.utils.aoa_to_sheet(linhas);
+    folha['!cols'] = [{ wch: 17 }, { wch: 34 }, { wch: 28 }, { wch: 38 }, { wch: 9 }, { wch: 16 }, { wch: 48 }];
+    for (var i = 1; i < linhas.length; i++) {
+      var celula = folha[XLSX.utils.encode_cell({ r: i, c: 5 })];
+      if (celula && typeof celula.v === 'number') celula.z = '#,##0.00';
+    }
+    var livro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(livro, folha, 'Registos de actividade');
+    XLSX.writeFile(livro, 'registos-simulador-empregados-domesticos.xlsx');
+  });
 
   document.getElementById('periodo').addEventListener('change', renderTudo);
   document.getElementById('filtro-tipo').addEventListener('change', function () { pagina = 1; renderTabela(); });

@@ -500,6 +500,10 @@
         <label for="telefone">Telefone</label>
         <input type="tel" id="telefone" placeholder="Ex.: 923 000 000" autocomplete="tel">
       </div>
+      <div class="campo">
+        <label for="email">Email</label>
+        <input type="text" id="email" placeholder="Ex.: nome@exemplo.com" inputmode="email" autocomplete="email">
+      </div>
     </div>
 
     <p class="subtitulo">Opções da Simulação</p>
@@ -845,6 +849,7 @@
       body: JSON.stringify(Object.assign({
         nome: document.getElementById('tomador').value.trim(),
         telefone: document.getElementById('telefone').value,
+        email: document.getElementById('email').value.trim(),
         empregados: empregados
       }, opcoesSimulacao()))
     })
@@ -876,6 +881,7 @@
   var feedback    = document.getElementById('contacto-feedback');
   var inpTomador  = document.getElementById('tomador');
   var inpTelefone = document.getElementById('telefone');
+  var inpEmail    = document.getElementById('email');
 
   var btnContratar  = document.getElementById('btn-contratar');
   var btnSaberMais  = document.getElementById('btn-saber-mais');
@@ -893,6 +899,7 @@
   btnSaberMais.addEventListener('click', function () {
     painelSaber.hidden = !painelSaber.hidden;
     if (!painelSaber.hidden && !prefTelefone.value) prefTelefone.value = inpTelefone.value;
+    if (!painelSaber.hidden && !prefEmail.value) prefEmail.value = inpEmail.value.trim();
   });
 
   /* mostrar o campo de email só quando a preferência é Email */
@@ -912,13 +919,16 @@
   btnContratar.addEventListener('click', function () {
     var nome = inpTomador.value.trim();
     var telefone = normalizarTelefone(inpTelefone.value);
+    var email = inpEmail.value.trim();
     var empregados = empregadosPreenchidos();
 
     inpTomador.classList.toggle('invalido', !nome);
     inpTelefone.classList.toggle('invalido', !telefone);
+    inpEmail.classList.toggle('invalido', !!email && !emailValido(email));
 
     if (!nome) { mostrarFeedback('erro', 'Indique o seu nome na secção Dados da Simulação.'); return; }
     if (!telefone) { mostrarFeedback('erro', 'Indique um telefone válido (9 dígitos, começado por 9) na secção Dados da Simulação.'); return; }
+    if (email && !emailValido(email)) { mostrarFeedback('erro', 'Indique um email válido ou deixe o campo em branco.'); return; }
     if (!empregados.length) { mostrarFeedback('erro', 'Indique pelo menos um salário para gerar a cotação.'); return; }
     feedback.className = 'feedback';
 
@@ -928,7 +938,8 @@
     modalNome.textContent = nome;
     modalTelefone.textContent = formatarTelefone(telefone);
     document.getElementById('modal-linha-preferencia').hidden = true;
-    document.getElementById('modal-linha-email').hidden = true;
+    document.getElementById('modal-linha-email').hidden = !email;
+    document.getElementById('modal-email').textContent = email;
     modalLinhaPremio.style.display = '';
     document.getElementById('modal-premio-rotulo').textContent = 'Prémio total a pagar ' + document.getElementById('p-forma').textContent;
     modalPremio.textContent = document.getElementById('p-apagar').textContent + ' Kz';
@@ -988,6 +999,7 @@
   function limparFormulario() {
     inpTomador.value = '';
     inpTelefone.value = '';
+    inpEmail.value = '';
     prefTelefone.value = '';
     prefEmail.value = '';
     document.querySelector('input[name="preferencia"][value="chamada"]').checked = true;
@@ -1083,9 +1095,11 @@
     modalFeedback.className = 'feedback';
 
     var corpo = { nome: nome, telefone: telefone, empregados: empregadosPreenchidos() };
-    if (!contratar) {
+    if (contratar) {
+      corpo.email = inpEmail.value.trim();
+    } else {
       corpo.preferencia = preferenciaEscolhida();
-      corpo.email = prefEmail.value.trim();
+      corpo.email = prefEmail.value.trim() || inpEmail.value.trim();
     }
 
     fetch(contratar ? '/api/contratar' : CONTACTO_ENDPOINT, {

@@ -42,6 +42,10 @@ export async function POST(request) {
   if (telefone.startsWith('244') && telefone.length === 12) telefone = telefone.slice(3);
   if (!/^9\d{8}$/.test(telefone)) telefone = null;
 
+  /* email é opcional no download; se vier válido, entra no PDF */
+  let email = String(corpo.email || '').trim().slice(0, 100);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) email = null;
+
   const empregados = normalizarEmpregados(corpo);
   if (!empregados.length) {
     return Response.json({ sucesso: false, mensagem: 'Indique pelo menos um salário para gerar a cotação.' }, { status: 422 });
@@ -49,11 +53,12 @@ export async function POST(request) {
 
   try {
     const opcoes = normalizarOpcoes(corpo);
-    const bytes = await gerarPdfBytes({ nome, telefone, empregados, opcoes });
+    const bytes = await gerarPdfBytes({ nome, telefone, email, empregados, opcoes });
     const calc = calcularPremios(empregados.map((e) => e.salario), opcoes);
     registarEvento('pdf', {
       nome: nome || undefined,
       telefone: telefone || undefined,
+      email: email || undefined,
       empregados: empregados.length,
       massaMensal: calc.massaMensal,
       premioAnual: calc.premioAnual,

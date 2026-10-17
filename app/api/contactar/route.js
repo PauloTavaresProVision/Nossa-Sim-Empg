@@ -93,13 +93,11 @@ export async function POST(request) {
   /* preferência de contacto (Quero Saber Mais): chamada/whatsapp ou email */
   const preferencia = corpo.preferencia === 'email' ? 'email' : 'chamada';
   let email = String(corpo.email || '').trim().slice(0, 100);
-  if (preferencia === 'email') {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-      return json({ sucesso: false, mensagem: 'Indique um email válido.' }, 422);
-    }
-  } else {
-    email = '';
+  const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+  if (preferencia === 'email' && !emailValido) {
+    return json({ sucesso: false, mensagem: 'Indique um email válido.' }, 422);
   }
+  if (!emailValido) email = ''; // opcional fora da preferência Email: ignora se inválido
 
   /* dados dos empregados (opcionais): validados e recalculados no servidor */
   const empregados = normalizarEmpregados(corpo);
@@ -109,7 +107,7 @@ export async function POST(request) {
   let cotacaoUrl = null;
   if (empregados.length && PUBLIC_BASE_URL) {
     try {
-      const id = await gerarPdfCotacao({ nome, telefone, empregados, opcoes });
+      const id = await gerarPdfCotacao({ nome, telefone, email, empregados, opcoes });
       cotacaoUrl = PUBLIC_BASE_URL + '/cotacoes/' + id;
     } catch (erro) {
       cotacaoUrl = null; // sem PDF o pedido de contacto segue na mesma
@@ -120,6 +118,7 @@ export async function POST(request) {
   /* descrição do pedido para o operador (field7) */
   let field7 = 'Website - Seguro Empregados Domésticos';
   field7 += preferencia === 'email' ? ' - Prefere EMAIL: ' + email : ' - Prefere Chamada/WhatsApp';
+  if (preferencia !== 'email' && email) field7 += ' - Email: ' + email;
   if (empregados.length) {
     const premioAnual = calcularPremios(empregados.map((e) => e.salario), opcoes).premioAnual;
     const valor = premioAnual.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d),)/g, ' ');
