@@ -493,26 +493,26 @@ var D = ${dadosJson};
       return;
     }
     var lista = registosFiltrados();
-    var linhas = [['Data / Hora', 'Visitante', 'Actividade', 'Contacto', 'Ref.', 'Prémio anual (Kz)', 'Cotação']];
+    var linhas = [['Data / Hora', 'Visitante', 'Actividade', 'Telefone', 'Email', 'Ref.', 'Prémio anual (Kz)', 'Cotação']];
     lista.forEach(function (r) {
       var etq = ETQ[r.tipo] || ['', r.tipo];
       var actividade = etq[1] + (r.tipo === 'esclarecimento' && r.preferencia
         ? ' (prefere ' + (r.preferencia === 'email' ? 'email' : 'chamada/WhatsApp') + ')' : '');
-      var contacto = [r.telefone ? fmtTel(r.telefone) : '', r.email || ''].filter(Boolean).join(' · ');
       linhas.push([
         new Date(r.t).toLocaleString('pt-PT', { timeZone: 'Africa/Luanda', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
         r.nome || 'Visitante ' + r.id + ' (não identificado)',
         actividade,
-        contacto || '–',
+        r.telefone ? fmtTel(r.telefone) : '',
+        r.email || '',
         r.id,
         r.premioAnual == null ? '' : Number(r.premioAnual),
         r.cotacaoUrl || ''
       ]);
     });
     var folha = XLSX.utils.aoa_to_sheet(linhas);
-    folha['!cols'] = [{ wch: 17 }, { wch: 34 }, { wch: 28 }, { wch: 38 }, { wch: 9 }, { wch: 16 }, { wch: 48 }];
+    folha['!cols'] = [{ wch: 17 }, { wch: 34 }, { wch: 28 }, { wch: 20 }, { wch: 30 }, { wch: 9 }, { wch: 16 }, { wch: 48 }];
     for (var i = 1; i < linhas.length; i++) {
-      var celula = folha[XLSX.utils.encode_cell({ r: i, c: 5 })];
+      var celula = folha[XLSX.utils.encode_cell({ r: i, c: 6 })];
       if (celula && typeof celula.v === 'number') celula.z = '#,##0.00';
     }
     var livro = XLSX.utils.book_new();
