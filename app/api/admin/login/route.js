@@ -2,7 +2,7 @@
  * POST /api/admin/login — valida as credenciais e abre a sessão (cookie).
  */
 
-import { credenciaisValidas, criarToken, cabecalhoSessao } from '../../../../lib/admin';
+import { credenciaisValidas, criarToken, cabecalhoSessao, pedidoHttps } from '../../../../lib/admin';
 
 const MAX_TENTATIVAS = 5;       // tentativas de login por IP...
 const JANELA_MS      = 10 * 60e3;
@@ -41,6 +41,6 @@ export async function POST(request) {
   /* redirects relativos: atrás do proxy o request.url traz o host interno */
   return new Response(null, {
     status: 303,
-    headers: { Location: '/admin/relatorio', 'Set-Cookie': cabecalhoSessao(criarToken()) },
+    headers: { Location: '/admin/relatorio', 'Set-Cookie': cabecalhoSessao(criarToken(), pedidoHttps(request)) },
   });
 }
