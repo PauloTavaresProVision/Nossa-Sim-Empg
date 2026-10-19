@@ -924,11 +924,11 @@
 
     inpTomador.classList.toggle('invalido', !nome);
     inpTelefone.classList.toggle('invalido', !telefone);
-    inpEmail.classList.toggle('invalido', !!email && !emailValido(email));
+    inpEmail.classList.toggle('invalido', !emailValido(email));
 
     if (!nome) { mostrarFeedback('erro', 'Indique o seu nome na secção Dados da Simulação.'); return; }
     if (!telefone) { mostrarFeedback('erro', 'Indique um telefone válido (9 dígitos, começado por 9) na secção Dados da Simulação.'); return; }
-    if (email && !emailValido(email)) { mostrarFeedback('erro', 'Indique um email válido ou deixe o campo em branco.'); return; }
+    if (!emailValido(email)) { mostrarFeedback('erro', 'Indique um email válido na secção Dados da Simulação.'); return; }
     if (!empregados.length) { mostrarFeedback('erro', 'Indique pelo menos um salário para gerar a cotação.'); return; }
     feedback.className = 'feedback';
 

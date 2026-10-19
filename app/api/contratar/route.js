@@ -63,10 +63,10 @@ export async function POST(request) {
     return json({ sucesso: false, mensagem: 'Indique um telefone válido (9 dígitos, começado por 9).' }, 422);
   }
 
-  /* email opcional; quando vem, tem de ser válido (entra no PDF e no email ao departamento) */
-  let email = String(corpo.email || '').trim().slice(0, 100);
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-    return json({ sucesso: false, mensagem: 'Indique um email válido ou deixe o campo em branco.' }, 422);
+  /* email obrigatório na contratação (entra no PDF e no email ao departamento) */
+  const email = String(corpo.email || '').trim().slice(0, 100);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    return json({ sucesso: false, mensagem: 'Indique um email válido.' }, 422);
   }
 
   const empregados = normalizarEmpregados(corpo);
@@ -90,7 +90,7 @@ export async function POST(request) {
       '',
       'Tomador do Seguro: ' + nome,
       'Telefone: ' + telFormatado,
-      ...(email ? ['Email: ' + email] : []),
+      'Email: ' + email,
       'N.º de empregados: ' + empregados.length,
       'Forma de pagamento: ' + FORMAS_PAGAMENTO[opcoes.formaPagamento],
     ];
